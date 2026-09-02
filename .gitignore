@@ -1,0 +1,12 @@
+# Never commit credentials or run artifacts
+.env
+.env.*
+!.env.example
+.qa-agent/
+qa-results/
+qa-workspace/
+.playwright-cli/
+node_modules/
+__pycache__/
+*.pyc
+.DS_Store

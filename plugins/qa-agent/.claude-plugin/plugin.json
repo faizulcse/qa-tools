@@ -1,0 +1,20 @@
+{
+  "name": "qa-agent",
+  "version": "0.4.0",
+  "description": "Agentic QA assistant: analyzes requirements and acceptance criteria into risk-ordered test scenarios, executes them through playwright-cli commands with a saved page snapshot per step, tests APIs, and files structured bug reports to Jira. No MCP servers required.",
+  "author": {
+    "name": "MD. FAIZUL ISLAM"
+  },
+  "keywords": [
+    "qa",
+    "testing",
+    "manual-testing",
+    "test-cases",
+    "playwright",
+    "playwright-cli",
+    "api-testing",
+    "bug-report",
+    "jira"
+  ],
+  "license": "MIT"
+}
