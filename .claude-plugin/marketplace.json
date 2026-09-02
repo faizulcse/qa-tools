@@ -11,6 +11,13 @@
       "version": "0.4.0",
       "description": "Agentic QA assistant: requirements analysis into risk-ordered test plans, browser execution through playwright-cli commands with a saved page snapshot per step, API testing, structured bug reports, and Jira via a bundled REST client. No MCP servers.",
       "keywords": ["qa", "testing", "manual-testing", "playwright-cli", "jira", "bug-report"]
+    },
+    {
+      "name": "git-agent",
+      "source": "./plugins/git-agent",
+      "version": "0.1.0",
+      "description": "Drafts a commit message - title and description - from the current working-tree changes, matched to the repository's existing commit style. Presents the draft for review and never commits without an explicit go-ahead. No MCP servers.",
+      "keywords": ["git", "commit", "commit-message", "conventional-commits", "developer-tools"]
     }
   ]
 }

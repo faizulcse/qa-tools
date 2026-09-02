@@ -1,13 +1,17 @@
 # qa-tools
 
-A Claude Code / Cowork plugin marketplace containing **qa-agent** — an agentic
-QA assistant for manual testing.
+A Claude Code / Cowork plugin marketplace containing:
+
+- **qa-agent** — an agentic QA assistant for manual testing.
+- **git-agent** — drafts a commit message (title + description) from your
+  current changes, in the repo's existing style.
 
 ## Install
 
 ```bash
 /plugin marketplace add faizulcse/qa-agent-marketplace
 /plugin install qa-agent@qa-tools
+/plugin install git-agent@qa-tools
 ```
 
 Replace `faizulcse` with your GitHub username if the repo lives elsewhere. Works
@@ -18,6 +22,7 @@ From a terminal instead of a session:
 ```bash
 claude plugin marketplace add faizulcse/qa-agent-marketplace
 claude plugin install qa-agent@qa-tools
+claude plugin install git-agent@qa-tools
 ```
 
 ## What qa-agent does
@@ -35,11 +40,26 @@ You never invoke skills by name — describe the testing and the right one loads
 
 Full documentation: [`plugins/qa-agent/README.md`](plugins/qa-agent/README.md).
 
+## What git-agent does
+
+| Skill | Say | Produces |
+| --- | --- | --- |
+| `commit-draft` | "draft a commit", "write a commit message for these changes" | A draft commit title + description in the repo's style, a note on what is / isn't staged, and a split recommendation if the changes are unrelated |
+
+It reads the working-tree diff and the recent commit history, matches the
+project's convention (Conventional Commits vs. plain, scope tags, trailers),
+and stops at the draft — nothing is staged, committed, or pushed without an
+explicit go-ahead.
+
+Full documentation: [`plugins/git-agent/README.md`](plugins/git-agent/README.md).
+
 ## Requirements
 
 No MCP servers and no connectors.
 
-- **Python 3.8+** — requirements analysis, API testing, reporting, Jira. No packages.
+- **Python 3.8+** — requirements analysis, API testing, reporting, Jira
+  (qa-agent); commit drafting (git-agent). Standard library only, no packages.
+- **git** — for git-agent, run it from inside a repository. Nothing else to set up.
 - **Node 18+ and playwright-cli** — only for browser execution:
 
   ```bash
@@ -59,8 +79,8 @@ Never commit `.env` — it is already in `.gitignore`.
 
 ## Releasing an update
 
-1. Edit files under `plugins/qa-agent/`.
-2. Bump `version` in **both** `plugins/qa-agent/.claude-plugin/plugin.json` and
+1. Edit files under `plugins/<plugin>/`.
+2. Bump `version` in **both** `plugins/<plugin>/.claude-plugin/plugin.json` and
    the matching entry in `.claude-plugin/marketplace.json`. Installed copies
    only update when the marketplace entry's version changes.
 3. Commit and push.
@@ -70,13 +90,17 @@ Users pick it up automatically (auto-update is the default), or on demand:
 ```bash
 /plugin marketplace update
 /plugin update qa-agent@qa-tools
+/plugin update git-agent@qa-tools
 ```
 
 Tag releases if you want people to pin one: `/plugin marketplace add owner/repo@v0.4.0`.
 
-## Version
+## Versions
 
-qa-agent 0.4.0. Changelog in [`plugins/qa-agent/CHANGELOG.md`](plugins/qa-agent/CHANGELOG.md).
+| Plugin | Version | Changelog |
+| --- | --- | --- |
+| qa-agent | 0.4.0 | [`plugins/qa-agent/CHANGELOG.md`](plugins/qa-agent/CHANGELOG.md) |
+| git-agent | 0.1.0 | [`plugins/git-agent/CHANGELOG.md`](plugins/git-agent/CHANGELOG.md) |
 
 ## License
 

@@ -1,0 +1,18 @@
+{
+  "name": "git-agent",
+  "version": "0.1.0",
+  "description": "Drafts a commit message - title and description - from the current working-tree changes, matched to the repository's existing commit style. Presents the draft for review and never commits without an explicit go-ahead. No MCP servers required.",
+  "author": {
+    "name": "MD. FAIZUL ISLAM"
+  },
+  "keywords": [
+    "git",
+    "commit",
+    "commit-message",
+    "conventional-commits",
+    "changelog",
+    "vcs",
+    "developer-tools"
+  ],
+  "license": "MIT"
+}
