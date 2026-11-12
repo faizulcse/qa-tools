@@ -9,7 +9,7 @@ A Claude Code / Cowork plugin marketplace containing:
 ## Install
 
 ```bash
-/plugin marketplace add faizulcse/qa-agent-marketplace
+/plugin marketplace add faizulcse/qa-tools
 /plugin install qa-agent@qa-tools
 /plugin install git-agent@qa-tools
 ```
@@ -20,7 +20,7 @@ with private repos too — Claude Code uses your existing git credentials.
 From a terminal instead of a session:
 
 ```bash
-claude plugin marketplace add faizulcse/qa-agent-marketplace
+claude plugin marketplace add faizulcse/qa-tools
 claude plugin install qa-agent@qa-tools
 claude plugin install git-agent@qa-tools
 ```
