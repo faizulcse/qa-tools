@@ -9,7 +9,7 @@ description: >
   request. Uses a bundled zero-dependency REST client - no MCP server or
   connector required.
 metadata:
-  version: "0.1.0"
+  version: "0.2.0"
 ---
 
 # Jira Integration
@@ -136,9 +136,14 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/jira_client.py" attach PROJ-1234 qa-repor
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/jira_client.py" comment PROJ-1234 --body-file verdict.md
 ```
 
-The comment should carry: verdict, counts by priority, bug keys filed (Jira
-links them automatically), open questions, and where the full evidence lives.
-Keep it short - the report is the attachment, the comment is the headline.
+Write the comment from `${CLAUDE_PLUGIN_ROOT}/templates/jira-comment.md`:
+**Template A (Testing Summary)** after testing a ticket against its acceptance
+criteria, **Template B (Retest)** after a developer reports an issue as fixed.
+Follow its status icons, S1-S4 severity scale, verdict guide, and posting
+checklist. Reference filed bug keys (Jira links them automatically) and say
+where the full evidence lives. Keep it short - the report is the attachment,
+the comment is the headline. Preview with `comment ... --dry-run` and confirm
+before posting.
 
 Moving the ticket's status is a team-process decision. List transitions and ask
 before performing one:

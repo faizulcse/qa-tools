@@ -93,13 +93,15 @@ Users pick it up automatically (auto-update is the default), or on demand:
 /plugin update git-agent@qa-tools
 ```
 
-Tag releases if you want people to pin one: `/plugin marketplace add owner/repo@v0.4.0`.
+Tag releases if you want people to pin one: `/plugin marketplace add owner/repo@v0.3.0`.
 
 ## Versions
 
+Marketplace (`qa-tools`): **0.3.0**
+
 | Plugin | Version | Changelog |
 | --- | --- | --- |
-| qa-agent | 0.4.0 | [`plugins/qa-agent/CHANGELOG.md`](plugins/qa-agent/CHANGELOG.md) |
+| qa-agent | 0.5.0 | [`plugins/qa-agent/CHANGELOG.md`](plugins/qa-agent/CHANGELOG.md) |
 | git-agent | 0.1.0 | [`plugins/git-agent/CHANGELOG.md`](plugins/git-agent/CHANGELOG.md) |
 
 ## License

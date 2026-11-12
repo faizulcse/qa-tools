@@ -8,7 +8,7 @@ description: >
   communicated. Produces an evidence-backed report with results, coverage,
   defects, open questions, and a sign-off recommendation.
 metadata:
-  version: "0.1.0"
+  version: "0.2.0"
 ---
 
 # Test Reporting
@@ -141,6 +141,7 @@ For a markdown report instead, pass `--format md`.
 Deliver the HTML report as a file. When the user wants it on the ticket, invoke
 **qa-jira** to post the summary as a comment on the feature issue and attach the
 report - link the individual bug keys inline so the ticket becomes the record.
+The comment follows Template A in `${CLAUDE_PLUGIN_ROOT}/templates/jira-comment.md`.
 
 Keep a chat summary to five lines: verdict, counts, the top defect, the top
 risk, and the recommended next action.

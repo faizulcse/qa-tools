@@ -165,7 +165,14 @@ Jira Data Center/Server: use `JIRA_PAT=` in place of email + token.
 | `scripts/build_report.py` | Turn `result.json` (and Playwright runner JSON) into an HTML/MD report |
 | `scripts/jira_client.py` | Jira REST: get, search, fields, duplicates, create-bug, comment, attach, transition |
 
-Templates for hand-written artifacts live in `templates/`.
+Templates for hand-written artifacts live in `templates/`:
+
+| Template | Used for |
+| --- | --- |
+| `templates/test-plan.md` | Test plan produced by `qa-analyze` |
+| `templates/bug-report.md` | Bug report produced by `qa-bug` |
+| `templates/jira-comment.md` | Jira comments: Testing Summary (A) and Retest (B) |
+| `templates/example-session.md`, `templates/example-case.py` | Worked examples |
 
 ## Safety rules the skills follow
 

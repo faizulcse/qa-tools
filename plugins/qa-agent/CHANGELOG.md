@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0
+
+- **Jira comment template.** New `templates/jira-comment.md` with two comment
+  shapes - Testing Summary (results per AC, totals, issues by S1-S4 severity)
+  and Retest - plus status icons, a verdict guide, writing rules, Jira
+  formatting notes, and a posting checklist. `qa-jira` and `qa-report` now use
+  it when posting results to a ticket.
+
 ## 0.4.0
 
 - **Removed the MCP server.** Deleted `.mcp.json` and the `mcpServers` manifest
