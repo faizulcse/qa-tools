@@ -1,15 +1,25 @@
-# QA Jira Comment Templates
+# QA Jira Comment Templates (workspace version)
 
-Two comment shapes for posting QA results to a Jira ticket. They work for any
-project or ticket type.
+Based on the qa-agent plugin template (v0.5.0,
+`~/.claude/plugins/cache/qa-tools/qa-agent/0.5.0/templates/jira-comment.md`).
+This copy is the one to use in this workspace. Changes from the plugin version:
+
+1. **Issues found** is optional. By default, open items are shown as ❌ Open or
+   ⚠️ Open rows in the Previous feedback tables instead.
+2. **Previous feedback** uses one table per feedback date.
+3. **Tickets without acceptance criteria:** use the story requirement as AC1 and
+   say so in the Scope note.
+4. **Questions, Recommendation and the report pointer** are left out unless asked for.
+
+Two comment shapes:
 
 - **Template A - Testing Summary:** after testing a ticket against its
-  acceptance criteria.
+  acceptance criteria and retesting earlier feedback.
 - **Template B - Retest:** after a developer reports an issue as fixed.
 
-Fill the chosen template into a file (e.g. `verdict-PROJ-1234.md`), replace
-every `<placeholder>`, delete rows and sections that do not apply, then preview
-and post through the bundled client:
+Fill the chosen template into a file (e.g. `qa-results/PROJ-1234/verdict-PROJ-1234.md`),
+replace every `<placeholder>`, delete rows that do not apply, then preview and
+post through the bundled client:
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/jira_client.py" comment PROJ-1234 --body-file verdict-PROJ-1234.md --dry-run
@@ -24,14 +34,17 @@ without `--dry-run`.
 
 | Icon | Use for |
 | --- | --- |
-| ✅ Pass | The criterion is fully met |
-| ⚠️ Partial | Met with a gap, or a minor defect |
-| ❌ Fail | Not met |
+| ✅ Pass / ✅ Fixed | The criterion is fully met, or the earlier feedback is fixed |
+| ⚠️ Partial | Met with a gap, or only partly verified (e.g. spec checked, live response not) |
+| ⚠️ Open | Earlier feedback still open, but not a defect (e.g. needs a product decision) |
+| ❌ Fail / ❌ Open | Not met, or the earlier feedback is still not fixed |
 | ⛔ Blocked | Cannot be tested because of the environment, data or a dependency (say why) |
 | ⏸️ Not run | Not tested yet (say what is needed) |
 | ℹ️ Info | An observation, not a defect |
 
 ## Severity scale
+
+Used only when the optional Issues found section is included.
 
 | Severity | Meaning |
 | --- | --- |
@@ -45,27 +58,29 @@ without `--dry-run`.
 
 | Verdict | When |
 | --- | --- |
-| ✅ Pass | Every in-scope criterion passes, and no S1 or S2 issues are open |
-| ⚠️ Pass with conditions | Criteria pass or partially pass, with only S3/S4 issues, or items not run that are agreed for later |
-| ❌ Fail | Any criterion fails, or any S1 or S2 issue is open |
+| ✅ Pass | Every in-scope criterion passes, no earlier feedback is ❌ Open, and no S1 or S2 issues are open |
+| ⚠️ Pass with conditions | Criteria pass or partially pass, with only ⚠️ items or S3/S4 issues, or items not run that are agreed for later |
+| ❌ Fail | Any criterion fails, any earlier feedback is ❌ Open, or any S1 or S2 issue is open |
 | ⛔ Blocked | Testing cannot proceed (environment, data or access) |
+
+The verdict reason must name something that is shown in the comment.
 
 ---
 
 ## Template A: Testing Summary
 
 ```markdown
-## Testing Summary: <TICKET-KEY>, <Ticket title>
+## Testing Summary: <Ticket title>
 
-**Verdict:** <✅ Pass | ⚠️ Pass with conditions | ❌ Fail | ⛔ Blocked> <optional: short reason>
+**Verdict:** <✅ Pass | ⚠️ Pass with conditions | ❌ Fail | ⛔ Blocked> <optional: (short reason, shown below)>
 **Tested by:** <Name> (QA) · **Date:** <YYYY-MM-DD> · **Environment:** <env name> (`<url or build>`)
 
 ### Scope
 - **Feature:** <what was tested, in one line>.
 - **Accounts / roles:** <roles or user types used>.
-- **Test data:** <data set or records used>.
-- **Layers:** <UI (browser/device), API (`<endpoints>`), database, mobile, ...>.
-- **Note:** <optional: out of scope, not used, or assumptions>.
+- **Test data:** <data set or records used; no customer names or IDs>.
+- **Layers:** <UI (browser/device), API (<endpoints>), database, Swagger spec, ...>.
+- **Note:** <out of scope or assumptions. If the ticket has no ACs: "the ticket has no formal ACs; the story requirement is used as AC1.">
 
 ### Results
 | Status | AC | Outcome |
@@ -77,29 +92,43 @@ without `--dry-run`.
 
 **Totals:** <N> ACs: ✅ <n> pass, ⚠️ <n> partial, ❌ <n> fail, ⏸️ <n> not run.
 
-### Issues found
-| Severity | Issue |
-|---|---|
-| S2 ❌ | **<Short title of the problem>.** <What happens, and where.> <BUG-KEY if filed> [Screenshot](<link>) |
-| S3 ⚠️ | **<Short title>.** <Detail.> |
-| S4 ⚠️ | **<Short title>.** <Detail.> Suggestion: <optional expected wording or behaviour>. |
-| Info ℹ️ | **<Observation>.** |
+### Previous feedback: status
+| Status | Feedback (<newest date>) | Now |
+|---|---|---|
+| ✅ Fixed | <earlier feedback, short> | <current behaviour: status code and message> |
+| ❌ Open | <earlier feedback> | <still happens> |
+
+| Status | Feedback (<older date>) | Now |
+|---|---|---|
+| ✅ Fixed | <earlier feedback> | <current behaviour> |
+| ⚠️ Partial | <earlier feedback> | <what was verified and what was not> |
+| ⚠️ Open | <earlier feedback> | <current behaviour; needs a decision> |
 ```
+
+### Previous feedback rules
+
+- One table per feedback comment, **newest date first**, with the date in the
+  `Feedback (<date>)` header.
+- Leave out feedback items the user asks to skip.
+- Feedback confirmed as intended behaviour: drop it, or, if the user wants it
+  shown, add it to the optional Issues found table with Need Fix "As per design".
 
 ### Optional sections
 
-Add these only when they are useful.
+Add these only when the user asks for them.
 
-**Need Fix column** - when issues have been triaged:
+**Issues found** - new defects found during this run:
 
 ```markdown
+### Issues found
 | Severity | Need Fix | Issue |
 |---|---|---|
-| S3 ⚠️ | Yes | **<title>.** <detail> |
-| S4 ⚠️ | No / Skip / As per design | **<title>.** <detail> |
+| S2 ❌ | Yes | **<Short title>.** <What happens, and where.> <BUG-KEY if filed> |
+| S3 ⚠️ | Yes | **<Short title>.** <Detail.> |
+| Info ℹ️ | No / As per design | **<Observation>.** |
 ```
 
-**Questions** - open `Q-` items from the test plan:
+**Questions:**
 
 ```markdown
 ### Questions for the product owner
@@ -113,26 +142,16 @@ Add these only when they are useful.
 <One or two lines: what to fix, and what to retest next.>
 ```
 
-**Evidence pointer** - where the full report lives:
+**Evidence pointer:**
 
 ```markdown
 _Full report and evidence: attached `qa-report.html`._
 ```
 
-**Test data note** - at the end, in italics:
+**Test data note:**
 
 ```markdown
 _Test data: <records created, changed or restored during testing>._
-```
-
-**Previous feedback status** - when earlier QA comments exist on the ticket:
-
-```markdown
-### Previous feedback: status
-| Status | Feedback (<date>) | Now |
-|---|---|---|
-| ✅ Fixed | <earlier feedback> | <current behaviour> |
-| ❌ Open | <earlier feedback> | <still happens> |
 ```
 
 ---
@@ -140,7 +159,7 @@ _Test data: <records created, changed or restored during testing>._
 ## Template B: Retest
 
 ```markdown
-## Retest: <TICKET-KEY>, <short issue name>
+## Retest: <short issue name>
 
 **Result:** <✅ Resolved | ⚠️ Partially resolved | ❌ Not resolved>
 **Tested by:** <Name> (QA) · **Date:** <YYYY-MM-DD> · **Environment:** <env name>
@@ -155,47 +174,41 @@ _Test data: <records created, changed or restored during testing>._
 
 ## Writing rules
 
-- **AC order:** one row per acceptance criterion, in AC order, using the
-  ticket's AC numbering. Split a criterion into two rows when it has two
-  distinct cases, e.g. "AC5 (permitted user)" and "AC5 (unauthorised user)".
-- **Only observed results:** a row is ✅ only if it was actually exercised and
-  observed in this run. Anything not executed is ⏸️ or ⛔, never ✅.
-- **Exact evidence:** quote the real UI text, status code or value, e.g.
-  `403 "Forbidden"` or `"Saved successfully."`. Avoid vague words such as
-  "works well" or "looks fine".
-- **Short titles:** start each issue with a **bold short title**, then one or
-  two lines of detail. Put bug keys and links last.
-- **Out of scope:** leave out-of-scope criteria out of the table and mention
-  them in one line under **Scope -> Note**.
-- **Sensitive data:** no personal or customer data, unmasked emails or phone
-  numbers, passwords, tokens or API keys. Redact screenshots too.
-- **Short comments:** the full detail goes in the attached report; the comment
-  is the headline.
+- **AC order:** one row per acceptance criterion, in the ticket's AC order and
+  numbering. With no ACs, use the story requirement as AC1.
+- **Only observed results:** ✅ only if it was actually exercised and observed in
+  this run. Spec-only checks are ⚠️ Partial. Anything not executed is ⏸️ or ⛔.
+- **Exact evidence:** quote the real status code, message or value, e.g.
+  `400` "size must be between 0 and 255". Avoid "works well" or "looks fine".
+- **No dangling references:** do not mention questions, issues or reports that
+  are not in the comment (e.g. "See question 1." without a Questions section).
+- **Sensitive data:** no customer names, account IDs, personal data, passwords,
+  tokens or API keys. Say "a test client account" instead.
+- **Short comments:** the comment is the headline. Detail goes in an attached
+  report when the user wants one.
 
 ## Jira formatting notes
 
-`jira_client.py comment --body-file` converts markdown to Jira wiki markup
-(headings, `**bold**`, inline code, links, lists, tables), so write the
-templates in markdown as-is. A few things still break the rendering:
+`jira_client.py comment --body-file` converts markdown to Jira wiki markup.
 
 | Avoid | Why | Use instead |
 | --- | --- | --- |
-| Curly braces such as `{id}` in paths | `{...}` is a Jira macro and may show "Unknown macro" | `<id>` or `:id` |
-| A pipe `\|` inside a table cell (e.g. "View \| Edit") | It splits the cell | "View/Edit" |
+| The ticket's own key (e.g. `PROJ-1234`) in the heading or text | Jira turns issue keys into link cards showing the key, title and status | Leave it out; the comment is already on that ticket. Reference other tickets only when needed |
+| Curly braces such as `{id}` in paths or JSON | `{...}` is a Jira macro and may show "Unknown macro" | `<id>`, or describe the value: `error: UNAUTHORIZED` |
+| A `*` inside inline code in a list item, e.g. `qa-*` | The converter treats it as italics and breaks the line | Write the full name, e.g. `qa-PCH-841-client` |
+| A pipe `\|` inside a table cell | It splits the cell | "View/Edit" |
 | An empty first header cell | It renders as `\|\|\|\|` | Always name the column, e.g. `Status` |
-| Pasting the markdown by hand into the old Jira editor | `**bold**` is not converted there | Post through the client, or convert to `*bold*` |
 
 Always run with `--dry-run` first and check the converted body for leftover
-`**` markers or broken table rows.
+`**` markers, lines starting with `_ `, or broken table rows.
 
 ## Posting checklist
 
-- [ ] The ticket key in the heading matches the ticket being commented on.
-- [ ] The verdict matches the results, using the verdict guide above.
-- [ ] The totals add up to the number of rows.
-- [ ] Every ❌ and ⚠️ result has a matching issue row, or is explained.
-- [ ] Filed bugs are referenced by key.
+- [ ] The heading has no ticket key (it would render as a link card), and the
+      title matches the ticket being commented on.
+- [ ] The verdict matches the results and its reason is shown in the comment.
+- [ ] The totals add up to the number of AC rows.
+- [ ] Every ❌ and ⚠️ row explains what is wrong or missing.
+- [ ] No references to removed sections.
 - [ ] No sensitive data in the text, screenshots or links.
 - [ ] The dry-run output was shown to the user and approved before posting.
-- [ ] **When editing an existing comment:** re-read it first (`jira_client.py
-      get <KEY>` returns all comments) and keep changes others made since.
