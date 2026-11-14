@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.0 - unreleased
+## 0.3.0 - 2026-11-15
 
 Setup **always builds the project at the repository root** and **adopts
 whatever is already there**, amending it instead of refusing or asking.

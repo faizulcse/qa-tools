@@ -2,12 +2,13 @@
 
 Status: Phase 1 released as pw-setup-agent 0.1.0 in qa-tools marketplace 0.4.0.
 The root layout and Google SSO login are released as pw-setup-agent 0.2.0 in
-qa-tools marketplace 0.5.0.
+qa-tools marketplace 0.5.0. Always the root and amend what exists is released as
+pw-setup-agent 0.3.0 in qa-tools marketplace 0.6.0.
 Google SSO login (`--auth google-sso`) was tested against a mock app and still
 needs a run against real Google; it includes the auth setup step and session
 reuse below. Session reuse for the username/password template is still Phase 2.
-Next: **0.3.0, always the root and amend what exists** is built and tested
-against seven scenario repos (not released yet). The spec folder is `tests/`
+**0.3.0, always the root and amend what exists**, was tested against seven
+scenario repos. The spec folder is `tests/`
 (was `specs/`); see "Specs folder: tests/" below. Google sign-in now goes
 through playwright-cli (`utils/login-cli.mjs`); see "Sign-in through
 playwright-cli (0.3.0)" in the Google SSO section. The `pw-login` skill

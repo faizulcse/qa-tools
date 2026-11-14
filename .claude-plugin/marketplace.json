@@ -1,7 +1,7 @@
 {
   "name": "qa-tools",
   "metadata": {
-    "version": "0.5.0"
+    "version": "0.6.0"
   },
   "owner": {
     "name": "MD. FAIZUL ISLAM",
@@ -25,7 +25,7 @@
     {
       "name": "pw-setup-agent",
       "source": "./plugins/pw-setup-agent",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "description": "Sets up and maintains a Playwright + TypeScript test project at the repository root (merged safely into an existing app) or in a sub-folder, using page objects, fixtures and typed test data, and checks that the project follows the conventions and works. No MCP servers required.",
       "keywords": ["playwright", "typescript", "e2e", "page-object-model", "test-automation", "scaffold"]
     }
