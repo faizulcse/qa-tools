@@ -46,8 +46,12 @@ const TEMPLATE_DIR = join(PLUGIN_ROOT, 'templates', 'project');
 const AUTH_DIRS = { password: null, 'google-sso': join(PLUGIN_ROOT, 'templates', 'auth', 'google-sso') };
 const PLUGIN_VERSION = JSON.parse(readFileSync(join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json'), 'utf8')).version;
 
-/** Template files whose published name differs (dotfiles are not stored as dotfiles). */
-const RENAMES = { gitignore: '.gitignore', 'env.example': '.env.example', nvmrc: '.nvmrc' };
+/**
+ * Template files whose published name differs. Dotfiles are not stored as
+ * dotfiles, and tsconfig.json is stored as .tmpl so editors don't treat the
+ * template folder as a TypeScript project (it has no node_modules).
+ */
+const RENAMES = { gitignore: '.gitignore', 'env.example': '.env.example', nvmrc: '.nvmrc', 'tsconfig.json.tmpl': 'tsconfig.json' };
 
 /** Plugin scripts copied into the project so it works without the plugin. */
 const COPIED_SCRIPTS = {

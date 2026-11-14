@@ -266,7 +266,7 @@ In a merged project, the check looks only at the test project's files.
 | `skills/pw-page-objects/` | Page object, fixture and spec conventions, with `references/examples.md` |
 | `skills/pw-locators/` | Locator priority and waits, with `references/patterns.md` |
 | `skills/pw-core-config/SKILL.md` | Config and tsconfig settings |
-| `templates/project/` | The project files (dotfiles stored without the dot) |
+| `templates/project/` | The project files (dotfiles stored without the dot, `tsconfig.json` as `tsconfig.json.tmpl`) |
 | `templates/auth/google-sso/` | Files that replace or add to the project for Google sign-in |
 
 ## Safety rules the skills follow

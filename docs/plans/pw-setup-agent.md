@@ -10,7 +10,9 @@ reuse for the username/password template is still Phase 2.
 
 - Templates live in `templates/project/` (copied into `tests/`); the GitHub
   workflow will go in `templates/github/`. Dotfiles are stored without the dot
-  (`gitignore`, `env.example`, `nvmrc`) so they don't affect this repo.
+  (`gitignore`, `env.example`, `nvmrc`) so they don't affect this repo, and
+  `tsconfig.json` is stored as `tsconfig.json.tmpl` so editors don't treat the
+  template folder as a TypeScript project.
 - Added `pages/home.page.ts` and `specs/home/home.spec.ts` (`@smoke`) so the
   header component has a page to live on and the smoke run has a target.
 - `pw-check` skill and a minimal `test-data/` (`types.ts`, `users.ts`, credentials
