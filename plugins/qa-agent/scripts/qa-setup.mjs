@@ -12,7 +12,7 @@
  */
 
 import { execSync } from 'node:child_process';
-import { mkdirSync, existsSync, writeFileSync } from 'node:fs';
+import { mkdirSync, existsSync, writeFileSync, copyFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const WS = resolve(process.argv[2] || './qa-workspace');
@@ -106,6 +106,15 @@ JIRA_API_TOKEN=
 `);
 }
 
+// Create .env from the template on first run; never overwrite filled-in values.
+const envFile = join(WS, '.env');
+if (!existsSync(envFile)) {
+  copyFileSync(envExample, envFile);
+  console.log(`Created ${envFile} from .env.example - fill in the URL and accounts.`);
+} else {
+  console.log(`.env already exists - leaving it unchanged.`);
+}
+
 const gitignore = join(WS, '.gitignore');
 if (!existsSync(gitignore)) {
   writeFileSync(gitignore, 'node_modules/\nqa-results/\n.env\n');
@@ -115,7 +124,7 @@ console.log(`
 Workspace ready: ${WS}
   tests/       spec files for cases promoted to automation
   qa-results/  screenshots, logs, result.json per case
-  .env.example copy to .env and fill in the environment URL and accounts
+  .env         fill in the environment URL and accounts (template: .env.example)
 
 Check the CLI:   ${cliCmd} --help
 Drive a page:    ${cliCmd} -s=qa open ${process.env.QA_BASE_URL || 'https://example.com'}
