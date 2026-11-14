@@ -5,6 +5,8 @@ default the project goes at the repository root, merged safely into an app
 that is already there; a sub-folder such as `tests/` is an option. The project
 comes with page objects, fixtures, typed test data, a `.env` file and lint
 rules, and a check that confirms it still follows the conventions as it grows.
+Apps whose only login is "Sign in with Google" are supported too: sign-in
+happens once in real Chrome, and the saved session is reused.
 
 This plugin **writes spec files**. To drive a browser by hand and report what
 happened without writing code, use qa-agent's `qa-test-ui` instead.
@@ -28,6 +30,7 @@ You never invoke a skill by name. Describe what you want and it loads.
 | Node 20.12+ (Playwright needs 20+; `.env` loading uses `process.loadEnvFile`) | `node --version` |
 | npm, or the package manager the repo already uses (pnpm, yarn, bun) | `npm --version` |
 | git (recommended: `.env` must be gitignored before it is written) | `git --version` |
+| Google Chrome, only for apps that sign in with Google | `CHROME_PATH` in `.env` if it isn't in the default place |
 
 No MCP servers or connectors.
 
@@ -146,6 +149,55 @@ Run these in the project folder. In merged mode the script names start with
 | `npm run check` | `npm run pw:check` | The pw-check structure and convention checks |
 | `npm run env:init` | `npm run pw:env:init` | Create `.env` from `.env.example` |
 
+## Google sign-in
+
+For apps where "Sign in with Google" is the only login. Setup spots this on
+the login page and uses the Google templates (`--auth google-sso`). It finds
+the app's **who-am-I endpoint** (a request that returns 401 signed out and 200
+signed in) and confirms it with you.
+
+**Why real Chrome:** Google refuses sign-in in any browser Playwright launches
+("This browser or app may not be secure"), whatever the config. A normal
+Chrome that Playwright only connects to is accepted. So the tests never sign
+in themselves: they load a saved session, and only the setup step opens Chrome
+to create it.
+
+| Piece | What it does |
+| --- | --- |
+| `.auth/<role>.json` | The saved session the tests load. Gitignored |
+| `.auth/chrome-profile/<role>/` | A dedicated Chrome profile per role, used only to sign in. Gitignored |
+| `specs/auth/auth.setup.ts` | Runs before the tests (project `setup`). Reuses the JSON while it is under `AUTH_MAX_AGE_MINUTES` (60) old **and** who-am-I returns 200 with it; otherwise opens Chrome, tries the account from `.env`, and waits up to 4 minutes for you to finish by hand |
+| `pages/components/google-sign-in.component.ts` | Fills Google's screens when it can: email box or account chooser, password, 2-Step code, consent. Best effort: anything it can't do, you do in the window |
+| `utils/chrome-profile.ts` | Starts Chrome on the profile and connects over CDP |
+| `utils/login-chrome.mjs` | Manual fallback: saves the session from a Chrome you started yourself |
+
+**In `.env`** (all optional; without them you sign in by hand): `<ROLE>` is
+the account email (e.g. `ADMIN=you@company.com`), `<ROLE>_PASSWORD`,
+`OTP` (a fixed 2-Step code), `AUTH_MAX_AGE_MINUTES`, `FORCE_LOGIN`,
+`CHROME_PATH`, and `AUTH_BROWSER_CHANNEL` (e.g. `chrome` to run the tests in
+installed Chrome). `BASE_URL` may contain `{ENVIRONMENT}`, filled from
+`ENVIRONMENT`.
+
+**Day to day:**
+
+| Script (`pw:` prefix when merged) | Does |
+| --- | --- |
+| `login` | Runs only the setup step. The first time, a Chrome window opens: finish signing in there |
+| `login:force` | Signs in again now, even with a valid session |
+| `login:chrome` | Manual fallback; see the top of `utils/login-chrome.mjs` |
+| `test` | Runs setup (instant when the session is valid), then the tests |
+
+The first run needs you at the screen. Later runs don't open a browser for
+setup. After an hour, or when the app rejects the session, Chrome reopens on
+the profile and refreshes it, usually without any typing because the profile
+remembers your Google account.
+
+**On CI** there's no one to sign in. Either restore the session JSON from a
+secret into `.auth/<role>.json` before the tests run (it's reused while
+fresh; refresh the secret when it expires), or ask the app team for a
+test-login endpoint that skips Google. On CI the setup step fails with this
+advice instead of trying to open Chrome.
+
 ## Scripts
 
 All scripts are Node 18+ with no dependencies, run from the repository root.
@@ -167,6 +219,10 @@ node "$CLAUDE_PLUGIN_ROOT/scripts/scaffold.mjs" --split-configs --env-prefix E2E
 # In a sub-folder instead
 node "$CLAUDE_PLUGIN_ROOT/scripts/scaffold.mjs" --root tests --write
 
+# An app whose only login is Google
+node "$CLAUDE_PLUGIN_ROOT/scripts/scaffold.mjs" --auth google-sso --me-endpoint /api/me \
+  --roles admin --base-url 'https://{ENVIRONMENT}.example.com' --write
+
 # Create or update .env
 node "$CLAUDE_PLUGIN_ROOT/scripts/init_env.mjs"            # create if missing
 node "$CLAUDE_PLUGIN_ROOT/scripts/init_env.mjs" --sync     # add keys new in .env.example
@@ -179,7 +235,7 @@ node "$CLAUDE_PLUGIN_ROOT/scripts/check_setup.mjs"
 | Script | Options |
 | --- | --- |
 | `detect_env.mjs` | `--root DIR` |
-| `scaffold.mjs` | `--root DIR`, `--base-url URL`, `--browsers` (`chromium`, `firefox`, `webkit`, `mobile-chrome`, `mobile-safari`), `--roles LIST`, `--project-name NAME`, `--split-configs`, `--env-prefix PREFIX` or `--reuse-env-keys`, `--write`, `--force` (pw-setup's own files only; never `.env` or the app's files). Exit `1` when blocked, or on `--write` with an open decision |
+| `scaffold.mjs` | `--root DIR`, `--base-url URL`, `--browsers` (`chromium`, `firefox`, `webkit`, `mobile-chrome`, `mobile-safari`), `--roles LIST`, `--project-name NAME`, `--split-configs`, `--env-prefix PREFIX` or `--reuse-env-keys`, `--auth password\|google-sso`, `--me-endpoint PATH` and `--login-path PATH` (Google), `--write`, `--force` (pw-setup's own files only; never `.env` or the app's files). Exit `1` when blocked, or on `--write` with an open decision |
 | `init_env.mjs` | `--root DIR`, `--base-url URL`, `--sync` or `--force`. Uses the env prefix from `pw-setup.json` |
 | `check_setup.mjs` | `--root DIR`. Exit `0` no failures, `1` failures, `2` bad arguments |
 
@@ -211,6 +267,7 @@ In a merged project, the check looks only at the test project's files.
 | `skills/pw-locators/` | Locator priority and waits, with `references/patterns.md` |
 | `skills/pw-core-config/SKILL.md` | Config and tsconfig settings |
 | `templates/project/` | The project files (dotfiles stored without the dot) |
+| `templates/auth/google-sso/` | Files that replace or add to the project for Google sign-in |
 
 ## Safety rules the skills follow
 
@@ -224,6 +281,8 @@ In a merged project, the check looks only at the test project's files.
 - `.env` is only written when it is gitignored.
 - Credentials are never asked for, filled in or printed. Scripts print key
   names, never values.
+- Nothing tries to get Google to accept a Playwright-launched browser. Google
+  sign-in happens only in real Chrome, with you able to take over.
 
 ## Troubleshooting
 
@@ -237,6 +296,10 @@ In a merged project, the check looks only at the test project's files.
 | Login spec fails | Expected until you fill in `.env` and adapt the labels in `pages/login.page.ts`. |
 | Browser download fails behind a proxy | Set `HTTPS_PROXY` and re-run `npx playwright install chromium`. |
 | On Linux, browsers fail to start | Run `npx playwright install --with-deps chromium` (may need sudo). |
+| "Google blocked the sign-in: This browser or app may not be secure" | Something signed in inside a Playwright-launched browser. Sign-in belongs only in the setup step, which uses real Chrome. |
+| "The Chrome profile ... is already open" | Close the Chrome window that uses `.auth/chrome-profile/<role>/` and run again. |
+| "Google Chrome was not found" | Install Chrome, or set `CHROME_PATH` in `.env`. |
+| Setup waits, then fails "who-am-I endpoint did not return 200" | Sign-in wasn't finished within 4 minutes, or `--me-endpoint` is wrong. Check the endpoint returns 200 in the signed-in Chrome window, then run `login` again. |
 
 ## Upgrading from 0.1.0
 
@@ -251,6 +314,5 @@ root ones, set `"root": "."` in `pw-setup.json`, and run
 
 See the plan in
 [`docs/plans/pw-setup-agent.md`](../../docs/plans/pw-setup-agent.md). Next:
-an auth setup project that saves each role's session as JSON and reuses it for
-an hour, faker-based test data builders, a GitHub Actions workflow, and more
-skills.
+the same saved-session setup step for username/password apps, faker-based
+test data builders, a GitHub Actions workflow, and more skills.

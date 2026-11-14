@@ -26,4 +26,11 @@ export default defineConfig([
       'playwright/no-eval': 'error',
     },
   },
+  {
+    // Auth setup steps branch on whether a saved session is still valid.
+    files: ['specs/**/*.setup.ts'],
+    rules: {
+      'playwright/no-conditional-in-test': 'off',
+    },
+  },
 ]);

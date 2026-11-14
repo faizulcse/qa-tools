@@ -2,7 +2,9 @@
 
 Status: Phase 1 released as pw-setup-agent 0.1.0 in qa-tools marketplace 0.4.0.
 Next: the root layout (pw-setup-agent 0.2.0) is built and tested, not released yet.
-The auth sessions (Phase 2) are planned, not built.
+Google SSO login (`--auth google-sso`, also 0.2.0) is built and tested against a
+mock app; it includes the auth setup step and session reuse below. Session
+reuse for the username/password template is still Phase 2.
 
 ### Phase 1 notes (changes from the original plan)
 
@@ -190,7 +192,7 @@ tests/
 ├── package.json                  # own scripts + @playwright/test (isolated from the app)
 ├── tsconfig.json                 # path aliases @pages/*, @data/*, @fixtures/*, @utils/*
 ├── .nvmrc
-├── .env.example                  # BASE_URL, TEST_ENV, FAKER_SEED, AUTH_MAX_AGE_MINUTES, role credentials (committed)
+├── .env.example                  # BASE_URL, ENVIRONMENT, TEST_ENV, FAKER_SEED, AUTH_MAX_AGE_MINUTES, FORCE_LOGIN, role credentials (committed)
 ├── .env                          # created by init-env from .env.example (gitignored)
 ├── .gitignore                    # .auth/, test-results/, playwright-report/, .env
 ├── eslint.config.mjs             # with eslint-plugin-playwright
@@ -251,28 +253,33 @@ existing tests; the topic skills cover *how to do X*.
 
 ## Auth sessions
 
-Each role logs in once and its session is saved as JSON, then reused until it
-is an hour old.
+Each role logs in once and its session is saved as JSON, then reused while it
+is under an hour old **and** still accepted by the app.
+
+Built first for Google SSO (0.2.0, see "Google SSO login" below); the
+username/password template gets the same setup step in Phase 2.
 
 - **File:** `.auth/<role>.json`, written with
   `page.context().storageState({ path })` (cookies and localStorage, the
   format Playwright loads with `use: { storageState }`). `.auth/` is
   gitignored; the files are never committed.
-- **Reuse rule:** in `auth.setup.ts`, for each role, a shared helper
-  (`utils/auth-session.ts`, `isSessionFresh(file, maxAgeMinutes)`) checks the
-  file:
-  - **Missing, unreadable, not valid JSON, or no cookies and no origins:**
-    log in.
+- **Reuse rule:** in `auth.setup.ts`, for each role, helpers in
+  `utils/auth.ts` (`sessionAgeMinutes`, `meStatus`) check the file:
+  - **Missing:** log in.
   - **Older than `AUTH_MAX_AGE_MINUTES` (default 60), by file modification
-    time:** force a new login, even though the file exists.
+    time:** log in again, even though the file exists.
+  - **The app's who-am-I endpoint does not return 200 with it** (checked
+    through `request.newContext({ storageState })`, no browser): log in
+    again. This catches sessions the server expired early.
   - **Otherwise:** reuse it and skip the login (the setup test passes and logs
-    `reusing .auth/<role>.json (age 23 min)`).
+    `reusing <role>.json (23 min old)`, in under a second).
 - **After a login:** overwrite `.auth/<role>.json` with the new session. The
   write goes to a temp file first and is then renamed, so a run that dies
   mid-write never leaves a half-written JSON behind.
-- **Force a login now:** `AUTH_FORCE_LOGIN=1 npm test` (or `pw:test` in merged
-  mode) ignores the age and logs in for every role. Deleting `.auth/` does the
-  same.
+- **Force a login now:** `FORCE_LOGIN=1`, or the `login:force` script
+  (detected through `npm_lifecycle_event`, so it works on Windows without
+  `cross-env`), skips the reuse check for every role. Deleting the JSON files
+  does the same.
 - **Settings:** `AUTH_MAX_AGE_MINUTES` in `.env.example` (default `60`), read
   through `utils/env.ts`. If the app expires sessions sooner than an hour, set
   it lower. Not a secret, so `init_env.mjs` fills in the default.
@@ -281,9 +288,148 @@ is an hour old.
   agrees. Either way the result is the same JSON file.
 - **Where it runs:** the `setup` project, which every browser project depends
   on, so it runs once per `npx playwright test` before any test, not once per
-  worker. On CI the `.auth/` folder starts empty, so every job logs in once.
+  worker.
 - **Auth tests themselves** (login, logout, wrong password) don't use the
   saved session: they start from an empty `storageState` in the spec.
+
+## Google SSO login (`--auth google-sso`, 0.2.0)
+
+For apps whose only login is "Sign in with Google" (Google Identity Services
+popup). The design was verified end to end on a real project; the plugin
+version was then
+tested against a local mock app with fake Google screens.
+
+### Facts the design is built around
+
+1. Google blocks sign-in in **any** browser Playwright launches (headed or
+   headless, bundled Chromium or `channel: 'chrome'`): "Couldn't sign you in –
+   This browser or app may not be secure". No config change avoids it, and the
+   plugin adds no flags or tricks to evade Google's bot detection.
+2. A normal Google Chrome process that Playwright only **connects** to over
+   CDP (`chromium.connectOverCDP`) is accepted.
+3. Chrome refuses remote debugging on its default user-data directory, so a
+   dedicated profile folder is needed.
+4. `launchPersistentContext` can't reuse a profile real Chrome created:
+   Playwright starts Chrome with a mock keychain on macOS, so the profile's
+   cookies can't be decrypted. Chrome is started as a plain child process.
+5. A profile can be open in one Chrome at a time (`SingletonLock`).
+6. Google's screens vary (email box or account chooser, password, 2-Step
+   code, consent "Continue"). Automatic filling is best-effort and falls back
+   to the user finishing by hand; it never fails the run by itself.
+
+### Architecture
+
+- **Tests load only JSON:** `.auth/<role>.json`. Every browser project has
+  `dependencies: ['setup']` and `storageState: storageStatePath('<first
+  role>')`; the `chromium`-based projects also take `channel` from
+  `AUTH_BROWSER_CHANNEL` (empty = bundled Chromium).
+- **Chrome profile per role:** `.auth/chrome-profile/<role>/`, used only by
+  the setup step to create or refresh the JSON. Everything is under the
+  gitignored `.auth/`. (The reference used one `.auth/chrome-profile/`; one per
+  role keeps each role's Google account separate.)
+- **Setup step** `specs/auth/auth.setup.ts` (project `setup`,
+  `testMatch: /.*\.setup\.ts/`, timeout 5 min), per role:
+  1. Reuse `.auth/<role>.json` when it passes the reuse rule above (age and
+     who-am-I 200), unless forced. No browser opens.
+  2. On CI, stop with a clear error instead of opening Chrome (see CI below).
+  3. Otherwise `openChromeProfile(<base URL + login path>, profile)`.
+  4. If who-am-I (through `page.request`) is not 200: wait for the
+     "Sign in with Google" button, click it, and if the account email is set,
+     try `GoogleSignInComponent.signIn()` in try/catch. Any error logs
+     "finish signing in by hand in the Chrome window".
+  5. Unconditionally `expect.poll(meStatus, { timeout: 4 min, intervals: [2s] })
+     .toBe(200)` (unconditional so `playwright/no-conditional-expect` passes).
+  6. `context.storageState()` to a temp file, rename to `.auth/<role>.json`;
+     close Chrome in `finally`.
+- **`utils/chrome-profile.ts`** `openChromeProfile(url, profileDir)`:
+  - Executable from `CHROME_PATH`, else the per-OS default (macOS
+    `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`, Linux
+    `google-chrome`, Windows `%ProgramFiles%\Google\Chrome\Application\chrome.exe`);
+    a clear error if missing.
+  - Refuses with a clear message when the profile is open in a running
+    Chrome. A `SingletonLock` whose process is gone is stale and ignored, as
+    Chrome itself does (found in testing: a killed Chrome leaves the lock).
+  - Deletes `DevToolsActivePort`, spawns Chrome with
+    `--user-data-dir=<profile> --remote-debugging-port=0 --no-first-run
+    --no-default-browser-check <url>` (stdio ignored), polls
+    `DevToolsActivePort` (port on line 1, 20 s), `connectOverCDP`, and finds
+    the app's tab.
+  - `close()` quits Chrome gracefully with the CDP `Browser.close` command (so
+    it releases the profile lock), falls back to killing the process, then
+    disconnects.
+- **`pages/components/google-sign-in.component.ts`**, rooted on the popup
+  `Page`: email `getByRole('textbox', { name: /email or phone/i })`, password
+  `getByLabel(/enter your password/i)`, code
+  `getByRole('textbox', { name: /code|otp|pin/i })`, `Next`, consent
+  `/^(continue|allow)$/i`, the account-chooser entry for the email,
+  "Use another account", and the blocked text
+  `/browser or app may not be secure/i` with `.first()` (several nodes match).
+  `signIn()` races "popup closed" against every known screen (60 s each,
+  `Promise.any`) and handles them in any order, up to 10 steps. **Account
+  chooser and email box are alternatives** (the known gap from the reference:
+  automatic email entry timed out because Google showed the chooser first).
+  An input on screen wins over a chooser match, since later screens also show
+  the email. It clicks `Next` explicitly (filling alone did not move Google
+  on), waits until each screen's element is gone or the URL changes, and
+  throws a clear error on the blocked screen. No `expect` in the component.
+- **`LoginPage`** (path from `--login-path`, default `/`): heading and the
+  "Sign in with Google" button; `openGoogleSignIn()` returns the component for
+  the popup. **`HomePage.waitForReady()`:** main visible, loading text hidden,
+  sign-in button hidden.
+- **Credentials from env only**, never asked for in chat: `<ROLE>` (account
+  email), optional `<ROLE>_PASSWORD`, optional `OTP` (a fixed code, entered if
+  a code screen appears). `BASE_URL` may contain `{ENVIRONMENT}`, filled from
+  `ENVIRONMENT` (both modes).
+- **New env keys** in `.env.example`: `ENVIRONMENT`, `<ROLE>`,
+  `<ROLE>_PASSWORD`, `OTP`, `AUTH_MAX_AGE_MINUTES`, `FORCE_LOGIN`,
+  `CHROME_PATH`, `AUTH_BROWSER_CHANNEL` (all with the env prefix, if any).
+  pw-check fails if the code reads a key missing from the example; OS and npm
+  variables (`ProgramFiles`, `npm_lifecycle_event`) are exempt.
+- **Scripts** (`pw:` prefix in merged mode): `login`
+  (`playwright test --project=setup --headed`), `login:force` (same, forces a
+  new sign-in), `login:chrome` (`utils/login-chrome.mjs`: connects to a Chrome
+  the user started with `--remote-debugging-port=9222`, checks who-am-I is
+  200, saves the JSON; the manual fallback).
+- **ESLint:** `playwright/no-conditional-in-test` is off for
+  `specs/**/*.setup.ts` only.
+
+### Specs scaffolded
+
+- `specs/login/login.spec.ts`, signed out
+  (`test.use({ storageState: { cookies: [], origins: [] } })`): the sign-in
+  screen shows (`@smoke`); the button opens a popup at `accounts.google.com`;
+  who-am-I returns 401.
+- `specs/home/home.spec.ts`, signed in: the app loads without the sign-in
+  button (`@smoke`); who-am-I returns 200.
+
+### Skill flow
+
+- **pw-setup Step 1:** open the app's login page (playwright-cli snapshot, or
+  ask the user). If the only option is "Sign in with Google", use
+  `--auth google-sso` and find the who-am-I endpoint from the network calls (a
+  request that returns 401 signed out); confirm it with the user. Pass
+  `--me-endpoint` and `--login-path`.
+- **Hand-over:** the first run needs the user at the screen: a Chrome window
+  opens and they finish signing in by hand if asked (up to 4 min). Later runs
+  reuse the JSON silently; after an hour, or when the app rejects it, the
+  profile refreshes it, usually without typing anything.
+- **CI:** no interactive login is possible. Two options, documented in the
+  README: restore the session JSON from a secret before the tests run (it then
+  passes the reuse rule), or ask the app team for a test-login endpoint that
+  skips Google. The setup step fails with that advice instead of trying to
+  open Chrome on CI.
+
+### Acceptance
+
+- Fresh scaffold: `typecheck`, `lint` (0 warnings), `playwright test --list`
+  and `check` pass. Done, including merged mode with `E2E_` and two roles.
+- First run: Chrome opens on the profile, sign-in completes, tests pass.
+  Done against the mock app (2 s); real Google still needs a run on a real
+  project.
+- Second run: no browser for setup, under 1 s. Done (0.45 s).
+- Blocked by Google: the clear error, not a strict-mode or timeout error.
+  Done (mock blocked screen).
+- Account chooser and email box both handled. Done (mock screens).
 
 ## The check (`pw-check` / `check_setup.mjs`)
 
@@ -328,7 +474,7 @@ node scripts/check_setup.mjs --root tests --run --smoke   # + auth setup and smo
 | Type check | `npx tsc --noEmit` |
 | Lint | `npx eslint .` |
 | Tests discovered | `npx playwright test --list` finds at least one test in each project |
-| Auth works | `npx playwright test --project=setup` writes a valid `.auth/<role>.json` for each role; a second run within the hour reuses it (file unchanged); with `AUTH_FORCE_LOGIN=1` it is rewritten |
+| Auth works | `npx playwright test --project=setup` writes a valid `.auth/<role>.json` for each role; a second run within the hour reuses it (file unchanged); with `FORCE_LOGIN=1` it is rewritten |
 | Smoke run | `npx playwright test --grep @smoke --project=chromium` passes |
 
 ### Behaviour
@@ -416,7 +562,8 @@ cd tests && npm run env:init                                        # same, for 
 |---|---|
 | 1. Working project (0.1.0, done) | `plugin.json`, `pw-setup`, `pw-core-config`, `pw-page-objects`, `pw-locators`, `detect_env`, `scaffold`, `init_env`, `check_setup` levels 1–2, and the config, page, fixture, spec and `.env.example` templates |
 | 1.5 Root layout (0.2.0) | The modes and merge rules above, script and skill updates, the five test scenarios |
-| 2. Data and auth | `pw-test-data` (faker and builders), `pw-auth`, `auth.setup.ts` with the 1-hour JSON session reuse, `utils/auth-session.ts`, `utils/env.ts`, check level 3 (`--run`, `--smoke`, env values filled) |
+| 1.6 Google SSO (0.2.0) | `--auth google-sso`: the auth setup step with session reuse, Chrome profile over CDP, Google sign-in component, SSO login/home specs, login scripts, skill and README updates |
+| 2. Data and auth | `pw-test-data` (faker and builders), `pw-auth`, an `auth.setup.ts` for the username/password template with the same session reuse as Google SSO, `utils/env.ts`, check level 3 (`--run`, `--smoke`, env values filled) |
 | 3. Quality and CI | `pw-artifacts`, `pw-best-practices`, `gen_page_object`, the GitHub workflow template, README and CHANGELOG |
 
 Each phase ends with a test scaffold into a temporary folder and a

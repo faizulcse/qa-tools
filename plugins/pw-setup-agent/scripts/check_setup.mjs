@@ -340,7 +340,8 @@ const exampleKeys = has('.env.example') ? envKeys(read('.env.example')) : null;
     /process\.env\.([A-Za-z_][A-Za-z0-9_]*)/g,
     /process\.env\[\s*['"`]([A-Za-z_][A-Za-z0-9_]*)['"`]\s*\]/g,
   ];
-  const IGNORED_VARS = new Set(['CI', 'NODE_ENV', 'DEBUG', 'PWDEBUG', 'HOME', 'PATH']);
+  // Set by the OS, npm or CI, never by .env.
+  const IGNORED_VARS = new Set(['CI', 'NODE_ENV', 'DEBUG', 'PWDEBUG', 'HOME', 'PATH', 'ProgramFiles', 'LOCALAPPDATA', 'npm_lifecycle_event']);
   for (const rel of sources) {
     const text = stripComments(read(rel));
     for (const re of patterns) {

@@ -1,6 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 import { env } from './utils/env';
-
+{{AUTH_IMPORT}}
 /**
  * Playwright configuration. See the pw-core-config skill for what each
  * setting does and when to change it.

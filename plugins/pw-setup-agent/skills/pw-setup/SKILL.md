@@ -9,7 +9,8 @@ description: >
   tests. Scaffolds a TypeScript project at the repository root (or in a
   sub-folder such as tests/) with page objects, fixtures, typed test data, a
   .env file and lint rules, merging safely into an existing app, then verifies
-  it with pw-check. Not for running manual browser tests through playwright-cli
+  it with pw-check. Supports apps whose only login is "Sign in with Google"
+  (signs in through real Chrome and reuses the saved session). Not for running manual browser tests through playwright-cli
   (that is qa-agent:qa-test-ui).
 metadata:
   version: "0.2.0"
@@ -45,6 +46,11 @@ report what happened without writing code, that is `qa-agent:qa-test-ui`.
 
 When the app has its own tsconfig or ESLint config, the test ones are
 `tsconfig.e2e.json` and `eslint.e2e.config.mjs` instead.
+
+With `--auth google-sso` (see "Google sign-in" below) it also adds
+`specs/auth/auth.setup.ts`, `utils/auth.ts`, `utils/chrome-profile.ts`,
+`utils/login-chrome.mjs` and `pages/components/google-sign-in.component.ts`,
+and the login and home pages and specs are the Google versions.
 
 ## The three modes
 
@@ -85,6 +91,21 @@ It prints the mode it would use and the package manager.
   in one sentence and propose `--root tests`.
 - **DECISION lines:** ask them in Step 2.
 
+Then look at how the app signs in. Ask for the app URL if you don't have it,
+and open its login page:
+
+- With playwright-cli (if installed): `playwright-cli open <url>`, then
+  `playwright-cli snapshot` and `playwright-cli network`. Close it afterwards.
+- Without it, ask the user what the login page offers.
+
+If the **only** way to sign in is "Sign in with Google", use the Google
+templates (`--auth google-sso`). They need the app's **who-am-I endpoint**: an
+API request that returns 401 while signed out (and 200 once signed in), such
+as `/api/me` or `/api/auth/session`. Pick it from the network calls the login
+page made, and confirm it with the user. Note the path where the button is
+(`--login-path`, default `/`). Anything else (a username/password form, or
+Google next to other options) uses the default `--auth password` templates.
+
 ## Step 2 - Ask what you need
 
 Ask only for what you cannot infer. Use these defaults when the user has no
@@ -96,6 +117,15 @@ preference:
 | Browsers | `--browsers` | `chromium` (also: `firefox`, `webkit`, `mobile-chrome`, `mobile-safari`) |
 | Test account roles | `--roles` | `user` (lowercase, e.g. `admin,viewer`) |
 | Location | `--root` | `.` (repository root); `tests` when the root is blocked |
+| Sign-in | `--auth` | `password`; `google-sso` when Google is the only login (Step 1) |
+| Who-am-I endpoint | `--me-endpoint` | Google only, required (Step 1) |
+| Login page path | `--login-path` | Google only, `/` |
+
+For Google sign-in, roles are named after the account they use, e.g.
+`--roles admin`. Each role gets its own Google account, session file and
+Chrome profile. The base URL may contain `{ENVIRONMENT}`
+(`https://{ENVIRONMENT}.example.com`); the user then sets `ENVIRONMENT`
+in `.env`.
 
 Then the merged-mode decisions, only if `detect_env` or the dry run reports
 them. Ask each as one short question with the recommended answer first:
@@ -110,9 +140,10 @@ them. Ask each as one short question with the recommended answer first:
   `--env-prefix E2E_`, which gives `E2E_BASE_URL`, `E2E_ADMIN_USERNAME` and so
   on.
 
-**Never ask for passwords, usernames or tokens.** Each role gets
-`<ROLE>_USERNAME` and `<ROLE>_PASSWORD` keys in `.env` (with the prefix, if
-any), left empty for the user to fill in themselves. If the user pastes
+**Never ask for passwords, usernames, emails, codes or tokens.** Each role
+gets `<ROLE>_USERNAME` and `<ROLE>_PASSWORD` keys in `.env` (Google:
+`<ROLE>` for the account email, optional `<ROLE>_PASSWORD`, optional `OTP`),
+with the prefix if any, left empty for the user to fill in themselves. If the user pastes
 credentials into the chat anyway, do not write them anywhere; tell them to put
 them in `.env`.
 
@@ -199,5 +230,37 @@ Tell the user, briefly:
 4. **Daily commands:** the `test`, `smoke`, `ui`, `report` and `check` scripts
    (prefixed `pw:` in merged mode).
 
+For Google sign-in, replace point 2 with:
+
+2. **Sign in once:** run the `login` script (`npm run login`, or
+   `pw:login`). A Chrome window opens on a dedicated profile; the setup step
+   tries the email, password and code from `.env`, and the user finishes by
+   hand whatever it can't (up to 4 minutes). Then the tests run signed in.
+   Later runs reuse `.auth/<role>.json` without opening a browser; after an
+   hour, or when the app rejects it, Chrome reopens and refreshes it, usually
+   without typing. `login:force` signs in again now; `login:chrome` is the
+   manual fallback (instructions at the top of `utils/login-chrome.mjs`).
+   Also adjust the button name and `HomePage.waitForReady()` if needed.
+
+and add:
+
+5. **CI:** Google sign-in cannot run on CI. Either restore the session JSON
+   from a secret into `.auth/<role>.json` before the tests run (refresh the
+   secret when it expires), or ask the app team for a test-login endpoint
+   that skips Google. The setup step fails with this advice on CI.
+
 Summarize what was created and which app files were merged in a few lines; do
 not paste the file list again.
+
+## Google sign-in: rules
+
+- **Never** try to make Google accept a Playwright-launched browser (flags,
+  user agents, stealth plugins). Google blocks them on purpose; the setup step
+  uses real Chrome over CDP instead.
+- Don't run the setup step yourself on the user's behalf unless they are at
+  the screen: it opens a Chrome window and may wait for them.
+- If the run fails with "Google blocked the sign-in", the sign-in happened in
+  a Playwright-launched browser (for example a spec that signs in itself).
+  Sign-in belongs only in `specs/auth/auth.setup.ts`.
+- "The Chrome profile ... is already open": a Chrome window still uses
+  `.auth/chrome-profile/<role>/`. Close it and run again.

@@ -35,6 +35,43 @@ The project is now created at the **repository root** by default.
   step, the decision questions and an optional step to exclude the test
   folders from the app's own configs.
 
+### Google sign-in (`--auth google-sso`)
+
+For apps whose only login is "Sign in with Google". Google blocks sign-in in
+browsers Playwright launches, so sign-in happens in real Chrome that
+Playwright connects to over CDP, and the tests load the saved session.
+
+- `specs/auth/auth.setup.ts` (project `setup`, every browser project depends
+  on it): reuses `.auth/<role>.json` while it is under
+  `AUTH_MAX_AGE_MINUTES` (60) old and the app's who-am-I endpoint returns 200;
+  otherwise opens Chrome on `.auth/chrome-profile/<role>/`, tries the account
+  from `.env`, and waits up to 4 minutes for the user to finish by hand. On CI
+  it fails with advice instead of opening Chrome.
+- `utils/chrome-profile.ts`: starts Chrome as a child process on the profile,
+  connects over CDP, quits it gracefully (so the profile lock is released),
+  and ignores stale profile locks.
+- `pages/components/google-sign-in.component.ts`: handles Google's screens in
+  any order: account chooser or email box, password, 2-Step code, consent;
+  clear error on "This browser or app may not be secure".
+- Google versions of the login and home pages and specs (signed out: sign-in
+  screen, popup to accounts.google.com, who-am-I 401; signed in: app loads,
+  who-am-I 200).
+- Scripts `login`, `login:force` and `login:chrome` (manual fallback,
+  `utils/login-chrome.mjs`).
+- New env keys: `<ROLE>`, `<ROLE>_PASSWORD`, `OTP`, `AUTH_MAX_AGE_MINUTES`,
+  `FORCE_LOGIN`, `CHROME_PATH`, `AUTH_BROWSER_CHANNEL`.
+- Scaffold flags `--auth google-sso`, `--me-endpoint` and `--login-path`;
+  `pw-setup` checks the login page and finds the who-am-I endpoint.
+
+### Both sign-in modes
+
+- `BASE_URL` may contain `{ENVIRONMENT}`, filled from the new `ENVIRONMENT`
+  key.
+- ESLint turns off `playwright/no-conditional-in-test` for
+  `specs/**/*.setup.ts`.
+- pw-check no longer asks for OS and npm variables (`ProgramFiles`,
+  `npm_lifecycle_event`) in `.env.example`.
+
 ## 0.1.0 - 2026-11-14
 
 First release (Phase 1 of the plan in `docs/plans/pw-setup-agent.md`).

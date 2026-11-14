@@ -16,6 +16,11 @@
  *                         tsconfig.json and eslint.config.mjs (needed when the app has its own)
  *   --env-prefix PREFIX   prefix the test env keys, e.g. E2E_ -> E2E_BASE_URL (for key clashes)
  *   --reuse-env-keys      use env keys the app's .env.example already has (for key clashes)
+ *   --auth MODE           password (default): username/password login page
+ *                         google-sso: "Sign in with Google" only; adds an auth setup step that
+ *                         signs in through real Chrome and saves .auth/<role>.json
+ *   --me-endpoint PATH    google-sso: the app's "who am I" endpoint (200 signed in, 401 not)
+ *   --login-path PATH     google-sso: where the "Sign in with Google" button is (default: /)
  *   --force               overwrite existing pw-setup files (never .env, never the app's files)
  *   --json                machine-readable output
  *
@@ -37,6 +42,8 @@ import { fileURLToPath } from 'node:url';
 
 const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const TEMPLATE_DIR = join(PLUGIN_ROOT, 'templates', 'project');
+/** Files that replace or add to templates/project for each --auth mode. */
+const AUTH_DIRS = { password: null, 'google-sso': join(PLUGIN_ROOT, 'templates', 'auth', 'google-sso') };
 const PLUGIN_VERSION = JSON.parse(readFileSync(join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json'), 'utf8')).version;
 
 /** Template files whose published name differs (dotfiles are not stored as dotfiles). */
@@ -73,19 +80,40 @@ const SCRIPT_NAMES = {
   lint: ['lint', 'pw:lint'],
   check: ['check', 'pw:check'],
   envInit: ['env:init', 'pw:env:init'],
+  // google-sso only
+  login: ['login', 'pw:login'],
+  loginForce: ['login:force', 'pw:login:force'],
+  loginChrome: ['login:chrome', 'pw:login:chrome'],
+};
+const SSO_SCRIPTS = ['login', 'loginForce', 'loginChrome'];
+
+/** Playwright projects: device, and whether a Chrome channel applies. */
+const BROWSERS = {
+  chromium: { device: 'Desktop Chrome', chrome: true },
+  firefox: { device: 'Desktop Firefox', chrome: false },
+  webkit: { device: 'Desktop Safari', chrome: false },
+  'mobile-chrome': { device: 'Pixel 7', chrome: true },
+  'mobile-safari': { device: 'iPhone 15', chrome: false },
 };
 
-const BROWSERS = {
-  chromium: "{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }",
-  firefox: "{ name: 'firefox', use: { ...devices['Desktop Firefox'] } }",
-  webkit: "{ name: 'webkit', use: { ...devices['Desktop Safari'] } }",
-  'mobile-chrome': "{ name: 'mobile-chrome', use: { ...devices['Pixel 7'] } }",
-  'mobile-safari': "{ name: 'mobile-safari', use: { ...devices['iPhone 15'] } }",
-};
+function projectEntries(opts) {
+  if (opts.auth !== 'google-sso') {
+    return opts.browsers.map((b) => `    { name: '${b}', use: { ...devices['${BROWSERS[b].device}'] } },`).join('\n');
+  }
+  const role = opts.roles[0];
+  const setup = '    // Signs in once per role and saves .auth/<role>.json (specs/auth/auth.setup.ts).\n' +
+    "    { name: 'setup', testMatch: /.*\\.setup\\.ts/, timeout: 5 * 60_000 },";
+  const browsers = opts.browsers.map((b) => {
+    const channel = BROWSERS[b].chrome ? ' channel: env.browserChannel || undefined,' : '';
+    return `    {\n      name: '${b}',\n      use: { ...devices['${BROWSERS[b].device}'],${channel} storageState: storageStatePath('${role}') },\n      dependencies: ['setup'],\n    },`;
+  });
+  return [setup, ...browsers].join('\n');
+}
 
 const USAGE =
   'usage: scaffold.mjs [--root DIR] [--base-url URL] [--browsers LIST] [--roles LIST] [--project-name NAME]\n' +
-  '                    [--split-configs] [--env-prefix PREFIX | --reuse-env-keys] [--write] [--force] [--json]';
+  '                    [--split-configs] [--env-prefix PREFIX | --reuse-env-keys]\n' +
+  '                    [--auth password|google-sso] [--me-endpoint PATH] [--login-path PATH] [--write] [--force] [--json]';
 
 function fail(message, code = 1) {
   console.error(`ERROR: ${message}`);
@@ -104,6 +132,9 @@ function parseArgs(argv) {
     splitConfigs: false,
     envPrefix: '',
     reuseEnvKeys: false,
+    auth: 'password',
+    meEndpoint: '',
+    loginPath: '/',
     write: false,
     force: false,
     json: false,
@@ -122,6 +153,9 @@ function parseArgs(argv) {
       case '--split-configs': opts.splitConfigs = true; break;
       case '--env-prefix': opts.envPrefix = needValue(i); i++; break;
       case '--reuse-env-keys': opts.reuseEnvKeys = true; break;
+      case '--auth': opts.auth = needValue(i); i++; break;
+      case '--me-endpoint': opts.meEndpoint = needValue(i); i++; break;
+      case '--login-path': opts.loginPath = needValue(i); i++; break;
       case '--write': opts.write = true; break;
       case '--dry-run': opts.write = false; break;
       case '--force': opts.force = true; break;
@@ -131,6 +165,13 @@ function parseArgs(argv) {
     }
   }
 
+  if (!(opts.auth in AUTH_DIRS)) fail(`--auth must be one of: ${Object.keys(AUTH_DIRS).join(', ')} (got "${opts.auth}")`, 2);
+  if (opts.auth === 'google-sso') {
+    if (!opts.meEndpoint) fail('--auth google-sso needs --me-endpoint: the app endpoint that returns 200 signed in and 401 signed out', 2);
+    for (const [flag, value] of [['--me-endpoint', opts.meEndpoint], ['--login-path', opts.loginPath]]) {
+      if (!/^\/[^\s'"`\\]*$/.test(value)) fail(`${flag} must be a path starting with / (got "${value}")`, 2);
+    }
+  }
   if (!/^https?:\/\/\S+$/.test(opts.baseUrl)) fail(`--base-url must start with http:// or https:// (got "${opts.baseUrl}")`, 2);
   opts.baseUrl = opts.baseUrl.replace(/\/+$/, '');
   const badBrowser = opts.browsers.find((b) => !BROWSERS[b]);
@@ -274,7 +315,9 @@ function inspect(opts, target) {
 
 function placeholders(opts, ctx) {
   const p = opts.envPrefix;
-  const envKeysFor = (role) => [`${p}${role.toUpperCase()}_USERNAME`, `${p}${role.toUpperCase()}_PASSWORD`];
+  const sso = opts.auth === 'google-sso';
+  // google-sso: <ROLE> is the account email; password mode: <ROLE>_USERNAME.
+  const envKeysFor = (role) => [`${p}${role.toUpperCase()}${sso ? '' : '_USERNAME'}`, `${p}${role.toUpperCase()}_PASSWORD`];
   const rootRel = relative(process.cwd(), resolve(opts.root));
   return {
     PROJECT_NAME: opts.projectName,
@@ -284,11 +327,23 @@ function placeholders(opts, ctx) {
     ENV_INIT_CMD: ctx.cmd('envInit'),
     ENV_INIT_HINT: `${ctx.cmd('envInit')}"${rootRel ? ` in ${rootRel}/` : ''}`,
     TSCONFIG_LINE: ctx.split ? "  tsconfig: './tsconfig.e2e.json',\n" : '',
-    PROJECTS: opts.browsers.map((b) => `    ${BROWSERS[b]},`).join('\n'),
+    PROJECTS: projectEntries(opts),
+    AUTH_IMPORT: sso ? "import { storageStatePath } from './utils/auth';\n" : '',
+    ENV_EXTRA: sso
+      ? `  authMaxAgeMinutes: Number(optionalEnv('${p}AUTH_MAX_AGE_MINUTES', '60')) || 60,\n` +
+        `  browserChannel: optionalEnv('${p}AUTH_BROWSER_CHANNEL'),\n`
+      : '',
+    ME_ENDPOINT: opts.meEndpoint,
+    LOGIN_PATH: opts.loginPath,
+    ROLE_LIST: opts.roles.map((r) => `'${r}'`).join(', '),
+    LOGIN_CHROME_CMD: sso ? ctx.cmd('loginChrome') : '',
     ROLE_ENV: opts.roles.map((r) => envKeysFor(r).map((k) => `${k}=`).join('\n')).join('\n'),
     ROLE_ENTRIES: opts.roles
       .map((r) => {
         const [u, pw] = envKeysFor(r);
+        if (sso) {
+          return `  ${r}: () => ({ email: optionalEnv('${u}'), password: optionalEnv('${pw}'), otp: optionalEnv('${p}OTP') }),`;
+        }
         return `  ${r}: () => ({ username: requireEnv('${u}'), password: requireEnv('${pw}') }),`;
       })
       .join('\n'),
@@ -318,6 +373,11 @@ function scriptsFor(ctx) {
     [n('lint')]: `eslint${ctx.split ? ' -c eslint.e2e.config.mjs' : ''}${lintTargets}`,
     [n('check')]: 'node utils/check-setup.mjs --root .',
     [n('envInit')]: 'node utils/init-env.mjs --root .',
+    ...(ctx.sso && {
+      [n('login')]: 'playwright test --project=setup --headed',
+      [n('loginForce')]: 'playwright test --project=setup --headed',
+      [n('loginChrome')]: 'node utils/login-chrome.mjs',
+    }),
   };
 }
 
@@ -390,15 +450,25 @@ function plan(opts, target) {
   const insp = inspect(opts, target);
   const { facts, split } = insp;
   const merged = facts.mode === 'merged';
-  const scriptNames = Object.fromEntries(Object.entries(SCRIPT_NAMES).map(([k, [plain, prefixed]]) => [k, merged ? prefixed : plain]));
+  const sso = opts.auth === 'google-sso';
+  const scriptNames = Object.fromEntries(
+    Object.entries(SCRIPT_NAMES)
+      .filter(([k]) => sso || !SSO_SCRIPTS.includes(k))
+      .map(([k, [plain, prefixed]]) => [k, merged ? prefixed : plain]),
+  );
   const pm = pmCommands(facts.packageManager);
   const cmd = (k) => (k === 'test' && facts.packageManager === 'npm' && !merged ? 'npm test' : `${pm.run} ${scriptNames[k]}`);
-  const ctx = { split, merged, scriptNames, cmd };
+  const ctx = { split, merged, sso, scriptNames, cmd };
   const values = placeholders(opts, ctx);
 
+  // templates/project, with the --auth mode's files replacing or adding to it.
+  const sources = new Map(walk(TEMPLATE_DIR).map((src) => [relative(TEMPLATE_DIR, src), src]));
+  const authDir = AUTH_DIRS[opts.auth];
+  if (authDir) for (const src of walk(authDir)) sources.set(relative(authDir, src), src);
+
   const rendered = [];
-  for (const src of walk(TEMPLATE_DIR)) {
-    let rel = relative(TEMPLATE_DIR, src);
+  for (const [templateRel, src] of sources) {
+    let rel = templateRel;
     const name = basename(rel);
     if (RENAMES[name]) rel = join(dirname(rel), RENAMES[name]);
     if (split && SPLIT_NAMES[rel]) rel = SPLIT_NAMES[rel];
@@ -446,6 +516,7 @@ function plan(opts, target) {
       eslint: split ? 'eslint.e2e.config.mjs' : 'eslint.config.mjs',
     },
     env: { prefix: opts.envPrefix },
+    auth: sso ? { mode: 'google-sso', meEndpoint: opts.meEndpoint, loginPath: opts.loginPath } : { mode: 'password' },
   };
   rendered.push({ path: 'pw-setup.json', content: `${JSON.stringify(manifest, null, 2)}\n` });
 
@@ -518,6 +589,7 @@ function main() {
     options: {
       baseUrl: opts.baseUrl, browsers: opts.browsers, roles: opts.roles, projectName: opts.projectName,
       splitConfigs: p.split, envPrefix: opts.envPrefix, reuseEnvKeys: opts.reuseEnvKeys,
+      auth: opts.auth, meEndpoint: opts.meEndpoint, loginPath: opts.loginPath,
     },
     files: p.files.map(({ path, status, changes, kept }) => ({ path, status, changes, kept })),
     counts,
@@ -561,7 +633,7 @@ function main() {
   const wrote = opts.write && ready;
   const icon = { create: '+', merge: '~', overwrite: '!', skip: '=', decide: '?' };
   console.log(`${wrote ? 'Scaffolded' : 'Dry run for'} ${target}`);
-  console.log(`  mode: ${p.facts.mode} · package manager: ${p.facts.packageManager}${p.split ? ' · split configs' : ''}${opts.envPrefix ? ` · env prefix ${opts.envPrefix}` : ''}`);
+  console.log(`  mode: ${p.facts.mode} · package manager: ${p.facts.packageManager}${p.split ? ' · split configs' : ''}${opts.envPrefix ? ` · env prefix ${opts.envPrefix}` : ''}${opts.auth === 'google-sso' ? ` · Google sign-in (who-am-I ${opts.meEndpoint})` : ''}`);
   console.log(`  base URL: ${opts.baseUrl} · browsers: ${opts.browsers.join(', ')} · roles: ${opts.roles.join(', ')}`);
   console.log('');
   for (const f of p.files) {

@@ -10,7 +10,7 @@ import path from 'node:path';
 
 // The project folder: one level up from utils/. Falls back to the working
 // directory when the package is an ES module (no __dirname).
-const projectDir = typeof __dirname === 'string' ? path.resolve(__dirname, '..') : process.cwd();
+export const projectDir = typeof __dirname === 'string' ? path.resolve(__dirname, '..') : process.cwd();
 const envFile = path.join(projectDir, '.env');
 if (fs.existsSync(envFile)) {
   process.loadEnvFile(envFile);
@@ -32,8 +32,17 @@ export function optionalEnv(name: string, fallback = ''): string {
   return process.env[name] || fallback;
 }
 
+/** BASE_URL may contain {ENVIRONMENT}, e.g. https://{ENVIRONMENT}.example.com, filled from ENVIRONMENT. */
+function resolveBaseUrl(): string {
+  const raw = requireEnv('{{ENV_PREFIX}}BASE_URL');
+  if (!raw.includes('{ENVIRONMENT}')) return raw;
+  return raw.replaceAll('{ENVIRONMENT}', requireEnv('{{ENV_PREFIX}}ENVIRONMENT'));
+}
+
+const environment = optionalEnv('{{ENV_PREFIX}}ENVIRONMENT');
+
 export const env = {
-  baseUrl: requireEnv('{{ENV_PREFIX}}BASE_URL'),
-  testEnv: optionalEnv('{{ENV_PREFIX}}TEST_ENV', 'local'),
-  isCI: !!process.env.CI,
+  baseUrl: resolveBaseUrl(),
+  testEnv: optionalEnv('{{ENV_PREFIX}}TEST_ENV', environment || 'local'),
+{{ENV_EXTRA}}  isCI: !!process.env.CI,
 } as const;
