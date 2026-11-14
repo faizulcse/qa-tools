@@ -6,6 +6,8 @@ qa-tools marketplace 0.5.0.
 Google SSO login (`--auth google-sso`) was tested against a mock app and still
 needs a run against real Google; it includes the auth setup step and session
 reuse below. Session reuse for the username/password template is still Phase 2.
+Next: **0.3.0, always the root and amend what exists** (planned below; code
+changes wait for approval).
 
 ### Phase 1 notes (changes from the original plan)
 
@@ -23,7 +25,149 @@ reuse below. Session reuse for the username/password template is still Phase 2.
 - Check rules for the setup project, faker usage and the CI workflow arrive
   with the phases that add those files.
 
+## Change for 0.3.0: always the root, amend what exists
+
+0.2.0 stops and asks, or refuses the root, when the repo already has a
+Playwright setup, the app's own tsconfig or ESLint config, clashing env keys,
+project folders with files in them, or a Next.js/Nuxt app. In 0.3.0 setup
+**always builds the project at the repository root** and **uses whatever
+already exists**: existing folders, files and dependencies are kept and
+amended with what the test project needs. Nothing is replaced, and setup no
+longer refuses or waits on a decision for any of these cases. The dry run
+still shows every change before anything is written.
+
+### Location
+
+- The project is always at the repository root. `scaffold.mjs` drops
+  `--root`; running it anywhere but the repo root (git top level, or the
+  folder with the root `package.json` when there is no git) stops with
+  "run from the repository root".
+- Modes shrink to two, recorded in `pw-setup.json`: **standalone** (no root
+  `package.json`) and **merged** (the app's `package.json` is there). The
+  0.2.0 *subfolder* mode is gone.
+- `detect_env`, `init_env` and `check_setup` keep `--root` only so 0.1.0
+  projects in `tests/` can still be checked; the skills pass it when
+  `tests/pw-setup.json` exists.
+
+### Amend rules
+
+| What exists | 0.3.0 behaviour |
+|---|---|
+| `package.json` | As in 0.2.0: add missing dev dependencies and the `pw:` scripts (merged mode); keep every app script and dependency version |
+| `@playwright/test` (or `playwright`) already a dependency | Keep the app's version; no blocker. Note it if it is older than the minimum the templates need (setup projects and `storageState` paths: 1.45+), with the upgrade command; never upgrade automatically |
+| `playwright.config.*` | **Keep it and amend it** (the skill edits it, since it is code; the scaffold reports what to add). Keep its `testDir`, `testMatch`, projects, reporters and timeouts. Add only what is missing: `baseURL` from `env.baseUrl` (a hard-coded `baseURL` moves into `.env.example` as the default `BASE_URL` value, so behaviour stays the same), trace/screenshot/video on failure, a blob reporter on CI, and for Google sign-in the `setup` project plus `dependencies` and `storageState` on the existing browser projects |
+| Its `testDir` (e.g. `e2e/`, `tests/`) | Specs go there: `<testDir>/home/home.spec.ts`, `<testDir>/login/...`, `<testDir>/auth/auth.setup.ts`. The test folder is recorded in `pw-setup.json` (`folders.specs`). If the config's `testMatch` would not collect `*.spec.ts` / `*.setup.ts`, the skill names the files to match or adds the pattern, and confirms with `playwright test --list` |
+| No Playwright config | Create `playwright.config.ts` with `testDir: './specs'`, as before |
+| `pages/`, `fixtures/`, `test-data/`, `utils/`, `specs/` already exist | Use them. Template files are added only where the same file does not exist; an existing file with the same name is kept, never overwritten (`--force` still refreshes files pw-setup created, listed in the manifest) |
+| Existing code files the templates rely on (e.g. a `utils/env.ts` or `fixtures/pages.fixture.ts` of the app's own) | Kept. The skill amends them with what the other templates import (a missing export such as `requireEnv`, a missing fixture registration), showing the change first; `typecheck` catches anything missed |
+| Next.js or Nuxt app | Page objects go in **`page-objects/`** instead of `pages/` (a root `pages/` folder is the app's routes there). The `@pages/*` alias points at `page-objects/`, so imports in specs don't change. No more blocker |
+| `tsconfig.json` | **Amended in place** (see below). No more `tsconfig.e2e.json` |
+| ESLint config (`eslint.config.*` or legacy `.eslintrc*`) | **Amended in place by the skill** (ESLint configs are code): add a block applying `eslint-plugin-playwright`'s recommended rules (and the 0.2.0 rule overrides) to the spec folder, and the `*.setup.ts` override. Flat config: a new array entry; legacy: an `overrides` entry with `plugin:playwright/recommended`. Shown before writing. No more `eslint.e2e.config.mjs`; `pw:lint` lints the test folders with the app's config. With no ESLint config, create `eslint.config.mjs` as before |
+| `.gitignore`, `.env.example`, `.env` | As in 0.2.0: append missing entries/keys in a marked block; `.env` only gets missing keys |
+| Env keys the app already has (`BASE_URL`, ...) | **Reused** without asking: the tests read the app's `BASE_URL`. The dry run lists the reused keys. `--env-prefix E2E_` stays available for teams that want separate keys, but is no longer a required decision |
+| `.nvmrc` | Kept; noted if it pins Node below 20.12 |
+| An earlier `pw-setup.json` | Still the one stop: "already set up, run pw-check"; `--force` refreshes pw-setup's own files |
+
+The only remaining blockers are the ones setup cannot work around: Node too
+old, npm missing, an invalid root `package.json`, or not at the repo root.
+
+### Amending tsconfig.json in place
+
+- Parse it as JSONC and edit **textually**, so comments and formatting stay:
+  insert missing keys at the end of `compilerOptions` / `paths` / `include`
+  with the file's own indentation. If a structure can't be located that way,
+  fall back to a full rewrite, and the dry run warns that comments will be
+  lost.
+- **`paths`:** add the missing aliases (`@pages/*`, `@fixtures`,
+  `@fixtures/*`, `@data/*`, `@utils/*`). Targets are written relative to
+  `baseUrl` when the app sets one (e.g. `../pages/*` for `baseUrl: "./src"`),
+  otherwise relative to the tsconfig. An alias the app already defines
+  differently is kept and reported (the templates' imports then need a
+  different alias; the skill renames them).
+- **`include`:** if the app has an `include` that does not cover the test
+  folders, add them (`playwright.config.ts`, the spec folder, the page-object
+  folder, `fixtures`, `test-data`, `utils`). The dry run notes that the
+  app's own `tsc` now type-checks the tests too, and, when the app's
+  tsconfig emits (`outDir`, no `noEmit`), that its build will emit them as
+  well; the hand-over suggests excluding the test folders from the build
+  step if that matters.
+- **`types`:** add `"node"` when the app lists `types`, or when TypeScript is
+  6+ (which no longer loads every `@types` package by default).
+- **Never changed:** `strict`, `target`, `module`, `moduleResolution`, `lib`.
+  If `strict` is off, pw-check reports it as a warning (not a failure) for
+  a tsconfig that pw-setup did not create.
+- **Exception:** if the app uses `moduleResolution: node16`/`nodenext`
+  (imports need file extensions), the template imports would not type-check
+  under it. Then, and only then, add a small `tsconfig.e2e.json` that
+  `extends` the app's and sets `moduleResolution: "bundler"` for the test
+  folders, and point `playwright.config.ts` and `pw:typecheck` at it; the
+  dry run says why.
+
+### What changes where
+
+- **`scaffold.mjs`:** no `--root`; new inspection of the existing Playwright
+  config (`testDir`, `testMatch`, `baseURL`, projects; read statically),
+  existing folders and files, the framework (Next.js/Nuxt → `page-objects/`),
+  and tsconfig details (`baseUrl`, `include`, `types`, `moduleResolution`).
+  New statuses in the dry run: `~` amend (with what it adds) for tsconfig,
+  `>` amend by the skill for the Playwright and ESLint configs and app code
+  files (with the exact additions to make). Removes the `split-configs` and
+  `env-keys` decisions and the folder/framework/Playwright blockers.
+  `--split-configs` and `--reuse-env-keys` go away (reuse is the default).
+  Templates are rendered with the folder map (spec folder, page-object
+  folder) so imports, the tsconfig aliases and `testDir` agree.
+- **`pw-setup.json`:** new `folders` map (`specs`, `pages`, `fixtures`,
+  `testData`, `utils`), `adopted` lists for files and configs that existed
+  before (so pw-check and `--force` never treat them as pw-setup's), and the
+  Playwright config file name.
+- **`check_setup.mjs`:** reads `folders` and the config file name from the
+  manifest instead of assuming `specs/` and `pages/`; `testDir` must match
+  `folders.specs` (not literally `./specs`); `strict` off in an adopted
+  tsconfig is a warning; convention checks still cover only the test
+  project's folders.
+- **`pw-setup` skill:** no location question and no decision questions. New
+  step after the dry run: apply the `>` amendments (Playwright config,
+  ESLint config, app code files), each shown first, then install and
+  verify. The hand-over lists what was adopted and what was added.
+- **Templates:** `{{SPECS_DIR}}` and `{{PAGES_DIR}}` placeholders in the
+  tsconfig paths, `testDir`, and the ESLint file globs.
+- **README:** "Where the project goes" becomes "Always at the root; what
+  setup does with what's already there"; the decision and blocker
+  sections and the subfolder examples go away; upgrade note for 0.2.0
+  subfolder projects (keep working via `--root`, no automatic move).
+
+### Testing the change
+
+Scratch repos, each scaffolded, amended by following the skill's `>`
+steps, then `typecheck`, `lint`, `check` and `--list`, plus a diff showing
+the app's files only gained lines:
+
+1. Empty repo → standalone, same output as 0.2.0.
+2. Node/TS app with its own `tsconfig.json` (with comments, `baseUrl:
+   "./src"`, `include: ["src"]`), flat ESLint config and `BASE_URL` in
+   `.env.example` → amended in place, comments kept, aliases relative to
+   `baseUrl`, `BASE_URL` reused.
+3. Existing Playwright project (`testDir: './e2e'`, hard-coded `baseURL`,
+   its own `pages/` with a `login.page.ts`) → specs in `e2e/`, the app's
+   `login.page.ts` kept, `baseURL` moved to env with the same value, the
+   existing tests still listed.
+4. Next.js app → page objects in `page-objects/`, `next build` unaffected.
+5. Legacy `.eslintrc.json` app → `overrides` entry added, lint passes.
+6. App with `moduleResolution: nodenext` → the `tsconfig.e2e.json`
+   exception.
+7. Google sign-in on top of case 3 → `setup` project and `storageState`
+   added to the existing projects.
+
+### Release
+
+pw-setup-agent **0.3.0**: the default stays the root, but setup no longer
+refuses or asks, and subfolder mode is removed.
+
 ## Change for 0.2.0: project at the repository root
+
+> Partly superseded by 0.3.0 above: the subfolder mode, the blockers for
+> existing Playwright/Next.js/folders, and the split-config and env-key
+> decisions are replaced by the amend rules.
 
 0.1.0 scaffolds everything into `tests/`. In 0.2.0 the project is created at
 the **repository root** by default. `--root tests` (or any folder) stays
@@ -137,7 +281,7 @@ doesn't trigger.
 |---|---|
 | Plugin name | `pw-setup-agent`, with skills prefixed `pw-` |
 | Language | TypeScript, `strict: true` |
-| Root folder | 0.1.0: `tests/`, with its own `package.json`. From 0.2.0: the repository root by default (merged safely into an app repo), `--root tests` optional; specs in `specs/` |
+| Root folder | 0.1.0: `tests/`, with its own `package.json`. 0.2.0: the repository root by default, `--root tests` optional. From 0.3.0: always the repository root, amending whatever already exists; specs in `specs/` or the existing Playwright `testDir` |
 | Pattern | Page objects plus fixtures; specs import `test` from `@fixtures` |
 | Test data | TS modules and `@faker-js/faker` |
 | CI | GitHub Actions |
@@ -566,6 +710,7 @@ cd tests && npm run env:init                                        # same, for 
 | 1. Working project (0.1.0, done) | `plugin.json`, `pw-setup`, `pw-core-config`, `pw-page-objects`, `pw-locators`, `detect_env`, `scaffold`, `init_env`, `check_setup` levels 1–2, and the config, page, fixture, spec and `.env.example` templates |
 | 1.5 Root layout (0.2.0) | The modes and merge rules above, script and skill updates, the five test scenarios |
 | 1.6 Google SSO (0.2.0) | `--auth google-sso`: the auth setup step with session reuse, Chrome profile over CDP, Google sign-in component, SSO login/home specs, login scripts, skill and README updates |
+| 1.7 Always root, amend (0.3.0) | Amend rules above: adopt existing folders, files, dependencies and configs; tsconfig amended in place; Playwright/ESLint configs amended by the skill; `page-objects/` for Next.js/Nuxt; remove subfolder mode, blockers and decisions; the seven test scenarios |
 | 2. Data and auth | `pw-test-data` (faker and builders), `pw-auth`, an `auth.setup.ts` for the username/password template with the same session reuse as Google SSO, `utils/env.ts`, check level 3 (`--run`, `--smoke`, env values filled) |
 | 3. Quality and CI | `pw-artifacts`, `pw-best-practices`, `gen_page_object`, the GitHub workflow template, README and CHANGELOG |
 
