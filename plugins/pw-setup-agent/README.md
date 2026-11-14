@@ -1,8 +1,9 @@
 # pw-setup-agent
 
-Sets up a Playwright + TypeScript test project and keeps it in shape. By
-default the project goes at the repository root, merged safely into an app
-that is already there; a sub-folder such as `tests/` is an option. The project
+Sets up a Playwright + TypeScript test project and keeps it in shape. The
+project always goes at the repository root, and whatever is already there (an
+app, a Playwright setup, tsconfig, ESLint config, folders, dependencies) is
+kept and amended rather than replaced. The project
 comes with page objects, fixtures, typed test data, a `.env` file and lint
 rules, and a check that confirms it still follows the conventions as it grows.
 Apps whose only login is "Sign in with Google" are supported too: sign-in
@@ -15,7 +16,7 @@ happened without writing code, use qa-agent's `qa-test-ui` instead.
 
 | Skill | Trigger it by saying | What it produces |
 | --- | --- | --- |
-| **pw-setup** | "set up Playwright", "scaffold e2e tests", "add Playwright with TypeScript", "set up a page object model project" | A test project at the root (or in `tests/`), installed and verified, with a short handover |
+| **pw-setup** | "set up Playwright", "scaffold e2e tests", "add Playwright with TypeScript", "set up a page object model project" | A test project at the repo root, adopting what's already there, installed and verified, with a short handover |
 | **pw-check** | "check my Playwright setup", "does my framework follow the conventions", "audit my page objects" | A read-only report: each rule as pass, warning or failure, with file, line and fix |
 | **pw-page-objects** | "create a page object", "add a component", "write a spec for this page", "register a fixture" | Page objects, components, fixtures and specs written the project's way |
 | **pw-locators** | "which locator should I use", "fix this flaky selector", "strict mode violation", "replace XPath" | Role- and label-based locators, patterns for hard cases, correct waits |
@@ -43,40 +44,31 @@ No MCP servers or connectors.
 
 Restart Claude Code so the skills load.
 
-## Where the project goes
+## Always at the root: what setup does with what's there
 
-Setup picks one of three modes and records it in `pw-setup.json`:
+The project is always built at the repository root. Whatever is already there
+is **kept and amended** with what the tests need: nothing is replaced or
+removed, and setup never stops to ask about it. The dry run shows every change
+first.
 
-| Mode | When | What happens |
-| --- | --- | --- |
-| **standalone** | Repo root with no `package.json` (an empty or test-only repo) | Files are written at the root. Scripts: `test`, `lint`, `check`... |
-| **merged** | Repo root with the app's `package.json` | Test files are added next to the app. Shared files are merged add-only, scripts are prefixed `pw:`, and installs use the repo's package manager |
-| **subfolder** | You ask for `--root tests` (or another folder) | A self-contained project in that folder with its own `package.json`, using npm |
-
-### What merged mode changes in the app's files
-
-| File | Change |
+| What exists | What setup does |
 | --- | --- |
-| `package.json` | Adds `pw:test`, `pw:smoke`, `pw:headed`, `pw:ui`, `pw:report`, `pw:typecheck`, `pw:lint`, `pw:check`, `pw:env:init`, and missing dev dependencies. Every app script and dependency version is kept |
-| `.gitignore` | Appends missing entries (`/.auth/`, `/test-results/`, `/playwright-report/`...) in a `# Playwright (pw-setup-agent)` block |
-| `.env.example` | Appends missing keys in the same kind of block |
-| `.env` | Adds missing keys only; never replaced |
-| `tsconfig.json`, ESLint config, `.nvmrc` | Never changed. The tests get `tsconfig.e2e.json` and `eslint.e2e.config.mjs` instead |
+| No `package.json` | **standalone**: everything is created at the root. Scripts: `test`, `lint`, `check`... |
+| The app's `package.json` | **merged**: adds `pw:test`, `pw:smoke`, `pw:headed`, `pw:ui`, `pw:report`, `pw:typecheck`, `pw:lint`, `pw:check`, `pw:env:init` and missing dev dependencies; every app script and dependency version is kept; installs use the repo's package manager |
+| `@playwright/test` or `playwright` | Kept at the app's version. A note with the upgrade command if it's older than 1.45 |
+| `playwright.config.*` | Kept, with its `testDir`, projects and reporters. New specs go in its `testDir` (e.g. `e2e/`). The skill adds what's missing: `baseURL` from env (a hard-coded one becomes the `BASE_URL` default, so nothing changes), traces/screenshots/videos on failure, a CI reporter, and the `setup` project for Google sign-in |
+| `tsconfig.json` | Amended in place, comments and formatting kept: the test aliases (relative to `baseUrl` if set), the test folders in `include`, `node` types. `strict`, `target`, `module` and `moduleResolution` never change. Apps on `nodenext` resolution or a target older than ES2017 get a small `tsconfig.e2e.json` that extends theirs instead |
+| ESLint config (flat or `.eslintrc*`) | Kept; the skill adds a block applying the Playwright rules to the spec folder |
+| `pages/`, `fixtures/`, `test-data/`, `utils/`, the spec folder | Used. A file with the same name is kept, never overwritten; if it lacks an export the new files need, the skill adds it. The app's own page objects stay as they are: the example specs are adapted to them |
+| Next.js or Nuxt | Page objects go in `page-objects/` (their `pages/` folder is routes); the `@pages` alias points there |
+| `.gitignore`, `.env.example` | Missing entries and keys appended in a `# Playwright (pw-setup-agent)` block |
+| `.env` | Missing keys added; never replaced |
+| Env keys the app has (`BASE_URL`...) | Reused by the tests. Pass `--env-prefix E2E_` for separate keys |
+| `.nvmrc` | Kept |
 
-Setup **asks** before going ahead when:
-
-- **The app has its own tsconfig or ESLint config:** use the split
-  `*.e2e.*` configs (recommended), or `--root tests`.
-- **`.env.example` already has `BASE_URL`:** reuse the app's keys, or give the
-  test keys an `E2E_` prefix (`E2E_BASE_URL`, `E2E_ADMIN_USERNAME`...).
-
-Setup **won't use the root** when:
-
-- the repo already has a Playwright config or `@playwright/test`
-- it is a Next.js or Nuxt app, where a root `pages/` folder becomes app routes
-- `specs/`, `pages/`, `fixtures/`, `test-data/` or `utils/` already hold files
-
-In those cases it suggests `--root tests`.
+Setup only stops for things it can't work around: Node older than 20.12, npm
+missing, not run from the repository root, an invalid `package.json`, or an
+existing `pw-setup.json` (then it's a check, not a setup).
 
 ## How setup works
 
@@ -84,34 +76,34 @@ Open Claude Code at the **repository root** and say "set up Playwright with
 TypeScript". The `pw-setup` skill then:
 
 1. **Inspects** the repo with `detect_env.mjs`: Node and npm versions, the
-   mode it would use, the package manager, and anything that blocks the root
-   or needs a decision.
-2. **Asks** only for what it can't infer: the app URL (default
-   `http://localhost:3000`), browsers (default `chromium`), test account
-   roles (default `user`), and the decisions above. It never asks for
+   mode, the package manager, the spec and page-object folders, and what it
+   will adopt.
+2. **Asks** only for what it can't infer: the app URL (default: the existing
+   config's `baseURL`, else `http://localhost:3000`), browsers (default
+   `chromium`) and test account roles (default `user`). It never asks for
    passwords or tokens.
-3. **Dry-runs** `scaffold.mjs` and shows you every file: `+` create, `~` merge
-   (with what it adds), `=` skipped, `?` needs a decision. It writes only once
-   you agree.
-4. **Offers** to exclude the test folders from the app's own tsconfig and
-   ESLint config, if those would otherwise pick them up.
+3. **Dry-runs** `scaffold.mjs` and shows you every file: `+` create, `~` the
+   app's file amended (with what it adds), `=` kept, `>` kept and amended by
+   the skill (with the exact additions). It writes only once you agree.
+4. **Applies** the `>` amendments (Playwright config, ESLint config, any app
+   file the new files import from), showing each change first.
 5. **Installs** dependencies and browsers.
 6. **Verifies** with `typecheck`, `lint`, `playwright test --list` and
    `check`. All four must pass before handover.
-7. **Hands over** with what to do next (below).
+7. **Hands over** with what was adopted, what was added, and what to do next.
 
-## What gets created
+## What the project looks like
 
 ```
-<root>/
-├── playwright.config.ts      testDir ./specs, baseURL from env, artifacts on failure
-├── package.json              scripts and pinned dependencies (merged into the app's)
-├── tsconfig.json             strict, aliases @pages/* @fixtures @data/* @utils/*   (or tsconfig.e2e.json)
-├── eslint.config.mjs         typescript-eslint + eslint-plugin-playwright         (or eslint.e2e.config.mjs)
+<repo root>/
+├── playwright.config.ts      created, or the app's own config amended
+├── package.json              scripts and dev dependencies (added to the app's)
+├── tsconfig.json             created, or the app's amended in place
+├── eslint.config.mjs         created, or the app's ESLint config amended
 ├── .env.example / .env       .env is gitignored and created from the example
 ├── .gitignore · .nvmrc · pw-setup.json (manifest read by pw-check)
-├── specs/                    home/home.spec.ts (@smoke), login/login.spec.ts
-├── pages/                    base.page.ts, home.page.ts, login.page.ts, components/
+├── specs/                    or the existing testDir: home/home.spec.ts (@smoke), login/login.spec.ts
+├── pages/                    page-objects/ in Next.js/Nuxt: base.page.ts, home.page.ts, login.page.ts, components/
 ├── fixtures/pages.fixture.ts page objects as fixtures
 ├── test-data/                types.ts, users.ts (credentials from env)
 └── utils/                    env.ts, check-setup.mjs, init-env.mjs
@@ -119,7 +111,9 @@ TypeScript". The `pw-setup` skill then:
 
 `utils/check-setup.mjs` and `utils/init-env.mjs` are copies of the plugin
 scripts, so the checks and `.env` creation work for teammates and on CI
-without the plugin.
+without the plugin. `pw-setup.json` records the folders, config files, what
+was adopted and which files existed before, so pw-check judges the project as
+it is.
 
 ## After setup
 
@@ -133,11 +127,11 @@ without the plugin.
 
 ### Commands in the generated project
 
-Run these in the project folder. In merged mode the script names start with
+Run these at the repository root. In merged mode the script names start with
 `pw:`, and you run them with the repo's package manager (`pnpm pw:test`,
 `yarn pw:test`...).
 
-| Standalone / subfolder | Merged | Does |
+| Standalone | Merged | Does |
 | --- | --- | --- |
 | `npm test` | `npm run pw:test` | Run all tests |
 | `npm run test:smoke` | `npm run pw:smoke` | Run tests tagged `@smoke` |
@@ -201,8 +195,7 @@ advice instead of trying to open Chrome.
 ## Scripts
 
 All scripts are Node 18+ with no dependencies, run from the repository root.
-`--root` defaults to `.` (the root). Each takes `--json` for machine-readable
-output.
+Each takes `--json` for machine-readable output.
 
 ```bash
 # Inspect the repo before scaffolding (exit 1 = blocked, e.g. Node too old)
@@ -213,11 +206,8 @@ node "$CLAUDE_PLUGIN_ROOT/scripts/scaffold.mjs" \
   --base-url https://staging.example.com --browsers chromium,firefox --roles admin,user
 node "$CLAUDE_PLUGIN_ROOT/scripts/scaffold.mjs" ... --write
 
-# Into an app that has its own tsconfig and a BASE_URL of its own
-node "$CLAUDE_PLUGIN_ROOT/scripts/scaffold.mjs" --split-configs --env-prefix E2E_ --write
-
-# In a sub-folder instead
-node "$CLAUDE_PLUGIN_ROOT/scripts/scaffold.mjs" --root tests --write
+# Separate env keys for the tests (E2E_BASE_URL...) instead of reusing the app's
+node "$CLAUDE_PLUGIN_ROOT/scripts/scaffold.mjs" --env-prefix E2E_ --write
 
 # An app whose only login is Google
 node "$CLAUDE_PLUGIN_ROOT/scripts/scaffold.mjs" --auth google-sso --me-endpoint /api/me \
@@ -230,28 +220,36 @@ node "$CLAUDE_PLUGIN_ROOT/scripts/init_env.mjs" --force    # recreate, old file 
 
 # Check structure and conventions (read-only)
 node "$CLAUDE_PLUGIN_ROOT/scripts/check_setup.mjs"
+node "$CLAUDE_PLUGIN_ROOT/scripts/check_setup.mjs" --root tests   # an older project in tests/
 ```
 
 | Script | Options |
 | --- | --- |
-| `detect_env.mjs` | `--root DIR` |
-| `scaffold.mjs` | `--root DIR`, `--base-url URL`, `--browsers` (`chromium`, `firefox`, `webkit`, `mobile-chrome`, `mobile-safari`), `--roles LIST`, `--project-name NAME`, `--split-configs`, `--env-prefix PREFIX` or `--reuse-env-keys`, `--auth password\|google-sso`, `--me-endpoint PATH` and `--login-path PATH` (Google), `--write`, `--force` (pw-setup's own files only; never `.env` or the app's files). Exit `1` when blocked, or on `--write` with an open decision |
-| `init_env.mjs` | `--root DIR`, `--base-url URL`, `--sync` or `--force`. Uses the env prefix from `pw-setup.json` |
-| `check_setup.mjs` | `--root DIR`. Exit `0` no failures, `1` failures, `2` bad arguments |
+| `detect_env.mjs` | none besides `--json`. Exit `1` when blocked |
+| `scaffold.mjs` | `--base-url URL`, `--browsers` (`chromium`, `firefox`, `webkit`, `mobile-chrome`, `mobile-safari`), `--roles LIST`, `--project-name NAME`, `--env-prefix PREFIX`, `--auth password\|google-sso`, `--me-endpoint PATH` and `--login-path PATH` (Google), `--write`, `--force` (files pw-setup created earlier only; never `.env` or the app's files). Exit `1` when blocked |
+| `init_env.mjs` | `--root DIR` (default `.`), `--base-url URL`, `--sync` or `--force`. Uses the env prefix from `pw-setup.json` |
+| `check_setup.mjs` | `--root DIR` (default `.`; `tests` for an older project). Exit `0` no failures, `1` failures, `2` bad arguments |
+
+`--root` on `scaffold.mjs` and `detect_env.mjs`, `--split-configs` and
+`--reuse-env-keys` were removed in 0.3.0: the project is always at the root,
+existing configs are amended, and existing env keys are reused.
 
 ## What pw-check enforces
 
-- **Structure:** required folders, `testDir` and `baseURL` from env, strict
-  TypeScript with the path aliases (and `playwright.config.ts` pointing at
-  `tsconfig.e2e.json` when configs are split), `.env` and artifacts
-  gitignored, every env variable the code reads listed in `.env.example`,
-  `.env` never tracked.
+- **Structure:** the folders recorded in `pw-setup.json`, `testDir` matching
+  the spec folder, `baseURL` from env, strict TypeScript with the path aliases
+  (and the config pointing at `tsconfig.e2e.json` where there is one), `.env`
+  and artifacts gitignored, every env variable the code reads listed in
+  `.env.example`, `.env` never tracked.
 - **Conventions:** page objects extend `BasePage` and hold no assertions; page
   objects are fixtures and specs import `test` from `@fixtures`; no XPath or
   element handles; no `waitForTimeout` or `.only`; no hard-coded secrets;
   trace, screenshot and video kept on failure.
 
-In a merged project, the check looks only at the test project's files.
+The check looks only at the test project's folders. Findings that sit only
+in files that existed before setup (the app's own tests and page objects),
+and `strict` off in the app's own tsconfig, are warnings rather than
+failures.
 
 ## Bundled files
 
@@ -273,10 +271,11 @@ In a merged project, the check looks only at the test project's files.
 
 - Nothing is written before you've seen the dry run, including every line it
   adds to the app's files.
-- The app's scripts, dependency versions, tsconfig, ESLint config and `.nvmrc`
-  are never changed by the scaffold. Excluding the test folders from the app's
-  configs is offered separately, and only done when you agree.
-- Existing pw-setup files are skipped unless you ask for `--force`; `.env` is
+- Existing things are only added to: the app's scripts, dependency versions,
+  settings, page objects and tests are never removed or rewritten. The only
+  value that changes is a hard-coded `baseURL`, which moves to `.env` with the
+  same URL.
+- Files pw-setup created are refreshed only with `--force`; `.env` is
   never overwritten without `init_env.mjs --force`, which backs it up first.
 - `.env` is only written when it is gitignored.
 - Credentials are never asked for, filled in or printed. Scripts print key
@@ -290,10 +289,12 @@ In a merged project, the check looks only at the test project's files.
 | --- | --- |
 | `detect_env` exits 1 | Upgrade Node to 20.12+ and re-run. |
 | Setup says the project already exists | `pw-setup.json` is there. Ask for a check instead. To refresh pw-setup's own files, re-run the scaffold with `--force`. |
-| Setup won't use the root | It found a Playwright config, a Next.js/Nuxt app, or folders it needs that already hold files. Use `--root tests`. |
-| The app's build or lint now picks up the specs | Add `playwright.config.ts`, `specs`, `pages`, `fixtures`, `test-data` and `utils` to the app tsconfig's `exclude` and the app ESLint config's `ignores`. |
+| "Run from the repository root" | Open Claude Code (or run the script) at the git top-level folder. |
+| The app's build now compiles the specs | The test folders are in the app tsconfig's `include`. If its build emits files, exclude the test folders in the build step (e.g. a `tsconfig.build.json`). |
+| New specs aren't listed by `--list` | The adopted config's `testDir` or `testMatch` doesn't reach them. Point `testDir` at the spec folder in `pw-setup.json`, or widen `testMatch`. |
+| pw-check warns about the app's own tests | They existed before setup and don't follow the conventions yet. Warnings only; update them when convenient. |
 | `init_env` refuses to write | Add `.env` to `.gitignore` (the scaffold does this; it fails only if the file was changed). |
-| Login spec fails | Expected until you fill in `.env` and adapt the labels in `pages/login.page.ts`. |
+| Login spec fails | Expected until you fill in `.env` and adapt the labels in the login page object. |
 | Browser download fails behind a proxy | Set `HTTPS_PROXY` and re-run `npx playwright install chromium`. |
 | On Linux, browsers fail to start | Run `npx playwright install --with-deps chromium` (may need sudo). |
 | "Google blocked the sign-in: This browser or app may not be secure" | Something signed in inside a Playwright-launched browser. Sign-in belongs only in the setup step, which uses real Chrome. |
@@ -301,14 +302,17 @@ In a merged project, the check looks only at the test project's files.
 | "Google Chrome was not found" | Install Chrome, or set `CHROME_PATH` in `.env`. |
 | Setup waits, then fails "who-am-I endpoint did not return 200" | Sign-in wasn't finished within 4 minutes, or `--me-endpoint` is wrong. Check the endpoint returns 200 in the signed-in Chrome window, then run `login` again. |
 
-## Upgrading from 0.1.0
+## Upgrading from 0.1.0 or 0.2.0
 
-0.1.0 projects live in `tests/` and keep working: their `pw-setup.json` says
-`root: tests`, and the skills pass `--root tests` when they find it there.
-There is no automatic move to the root. To move one, move the files out of
-`tests/` into the root, merge its `package.json` and `.gitignore` into the
-root ones, set `"root": "."` in `pw-setup.json`, and run
-`node utils/check-setup.mjs`.
+Projects set up in `tests/` (0.1.0, or 0.2.0 with `--root tests`) keep
+working: `check_setup.mjs --root tests` checks them. There is no automatic
+move to the root. To move one, move the files out of `tests/` into the root,
+merge its `package.json` and `.gitignore` into the root ones, set
+`"root": "."` in `pw-setup.json`, and run `node utils/check-setup.mjs`.
+
+0.2.0 projects at the root that used `tsconfig.e2e.json` and
+`eslint.e2e.config.mjs` also keep working: their `pw-setup.json` names those
+files.
 
 ## Roadmap
 

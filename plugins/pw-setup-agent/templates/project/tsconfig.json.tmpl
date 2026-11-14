@@ -10,7 +10,7 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["node"],
     "paths": {
-      "@pages/*": ["./pages/*"],
+      "@pages/*": ["./{{PAGES_DIR}}/*"],
       "@fixtures": ["./fixtures/pages.fixture"],
       "@fixtures/*": ["./fixtures/*"],
       "@data/*": ["./test-data/*"],
@@ -19,8 +19,8 @@
   },
   "include": [
     "playwright.config.ts",
-    "specs/**/*.ts",
-    "pages/**/*.ts",
+    "{{SPECS_DIR}}/**/*.ts",
+    "{{PAGES_DIR}}/**/*.ts",
     "fixtures/**/*.ts",
     "test-data/**/*.ts",
     "utils/**/*.ts"

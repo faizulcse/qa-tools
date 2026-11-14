@@ -6,7 +6,7 @@ import { env } from './utils/env';
  * setting does and when to change it.
  */
 export default defineConfig({
-  testDir: './specs',
+  testDir: './{{SPECS_DIR}}',
 {{TSCONFIG_LINE}}  outputDir: './test-results',
 
   fullyParallel: true,

@@ -14,17 +14,19 @@ metadata:
 
 # Playwright Core Configuration
 
-The project's runtime settings live in two files: `playwright.config.ts` and
-`tsconfig.json`, in the project folder (the repository root by default, or the
-folder in `pw-setup.json`'s `root`, such as `tests/`). Environment values come
-from `utils/env.ts`, the one place that reads `process.env`.
+The project's runtime settings live at the repository root in the Playwright
+config and `tsconfig.json`. `pw-setup.json` names them under `configs`: the
+config may be the app's own (`playwright.config.js`, with its own `testDir`
+such as `./e2e`), and the tsconfig may be the app's, amended with the test
+aliases. Environment values come from `utils/env.ts`, the one place that reads
+`process.env`. Env keys may carry a prefix (`E2E_BASE_URL`), listed under
+`env.prefix`.
 
-When the project was merged into an app that has its own configs, the test
-ones are `tsconfig.e2e.json` and `eslint.e2e.config.mjs`, and
-`playwright.config.ts` has `tsconfig: './tsconfig.e2e.json'` so Playwright
-resolves the path aliases. Edit those, never the app's `tsconfig.json`.
-`pw-setup.json` lists the file names under `configs`. Env keys may carry a
-prefix (`E2E_BASE_URL`), listed under `env.prefix`.
+When the config or tsconfig was the app's before setup (listed under
+`adopted`), change only what the request needs and keep the app's other
+settings. In an app on `nodenext` resolution or a target older than ES2017,
+the tests have `tsconfig.e2e.json` (extends the app's) and the config has
+`tsconfig: './tsconfig.e2e.json'`; put test aliases there.
 
 Before changing anything, read the current `playwright.config.ts`. After
 changing it, run `npx playwright test --list` and the `check` script
@@ -34,7 +36,7 @@ changing it, run `npx playwright test --list` and the `check` script
 
 | Setting | Value | Why |
 |---|---|---|
-| `testDir` | `./specs` | Only specs are collected; pages and fixtures are never run as tests. pw-check requires it. |
+| `testDir` | `./specs` (or the adopted config's, e.g. `./e2e`) | Only specs are collected; pages and fixtures are never run as tests. pw-check requires it to match `folders.specs`. |
 | `outputDir` | `./test-results` | Traces, screenshots and videos for failed tests. Gitignored. |
 | `fullyParallel` | `true` | Tests in one file run in parallel too. Requires independent tests. |
 | `forbidOnly` | `env.isCI` | A forgotten `.only` fails CI instead of silently skipping the rest. |
@@ -76,13 +78,15 @@ if the code reads a variable that `.env.example` does not list.
 **A slow test.** Use `test.slow()` or `test.setTimeout(60_000)` in that test.
 Do not raise the global timeout for one test.
 
-**A new path alias.** Add it to `compilerOptions.paths` in `tsconfig.json`, or
-`tsconfig.e2e.json` with split configs: `"@api/*": ["./api/*"]`. Playwright reads tsconfig paths, so no other change
-is needed.
+**A new path alias.** Add it to `compilerOptions.paths` in `tsconfig.json`
+(or `tsconfig.e2e.json` where the project has one): `"@api/*": ["./api/*"]`,
+relative to `baseUrl` if the tsconfig sets one. Playwright reads tsconfig
+paths, so no other change is needed.
 
 ## tsconfig.json (or tsconfig.e2e.json)
 
-- `strict: true` is required by pw-check.
+- `strict: true` is required by pw-check (a warning only when the tsconfig is
+  the app's own).
 - `types: ["node"]` is needed because TypeScript 6 no longer includes all
   `@types` packages automatically.
 - `typescript` is pinned to 6.0.x because `typescript-eslint` does not yet
@@ -110,7 +114,7 @@ projects: [
 ],
 ```
 
-- `setup` runs `specs/auth/auth.setup.ts` once before the browser projects. It
+- `setup` runs `<specs>/auth/auth.setup.ts` once before the browser projects. It
   gets 5 minutes because the first sign-in may wait for the user.
 - Every browser project needs `dependencies: ['setup']` and a `storageState`.
   Add both when you add a browser. To run a project as another role, point

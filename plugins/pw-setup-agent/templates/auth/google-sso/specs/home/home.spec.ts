@@ -1,7 +1,7 @@
 import { test, expect } from '@fixtures';
 import { meUrl } from '@utils/auth';
 
-// Signed in: the project loads the session saved by specs/auth/auth.setup.ts.
+// Signed in: the project loads the session saved by {{SPECS_DIR}}/auth/auth.setup.ts.
 test.describe('Home', () => {
   test('loads without the sign-in button', { tag: '@smoke' }, async ({ homePage }) => {
     await homePage.goto();

@@ -8,6 +8,18 @@ type Screen = 'closed' | 'blocked' | 'account' | 'useAnother' | 'email' | 'passw
 
 const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+/** The first promise to fulfil; rejects only when all reject (Promise.any, without needing ES2021). */
+function firstFulfilled<T>(promises: Promise<T>[]): Promise<T> {
+  return new Promise((resolve, reject) => {
+    let pending = promises.length;
+    for (const p of promises) {
+      p.then(resolve, () => {
+        if (--pending === 0) reject(new Error('none fulfilled'));
+      });
+    }
+  });
+}
+
 /**
  * The "Sign in with Google" popup (Google Identity Services).
  *
@@ -117,7 +129,7 @@ export class GoogleSignInComponent {
     }
     let screen: Screen;
     try {
-      screen = await Promise.any(candidates);
+      screen = await firstFulfilled(candidates);
     } catch {
       throw new Error(`No known Google sign-in screen appeared within ${SCREEN_TIMEOUT_MS / 1000}s.`);
     }

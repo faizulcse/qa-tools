@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { test, expect, request } from '@playwright/test';
-import { LoginPage } from '@pages/login.page';
+import { GoogleSignInComponent } from '@pages/components/google-sign-in.component';
 import { users, type Role } from '@data/users';
 import { env } from '@utils/env';
 import { openChromeProfile } from '@utils/chrome-profile';
@@ -17,6 +17,9 @@ import { LOGIN_PATH, chromeProfilePath, forceLogin, meStatus, sessionAgeMinutes,
  *   Playwright-launched browsers), tries to sign in from env, and waits up to
  *   4 minutes for the user to finish by hand.
  * - FORCE_LOGIN=1 or `login:force` skips the reuse check.
+ *
+ * Self-contained on purpose: it does not use LoginPage, so it keeps working
+ * when the app has page objects of its own.
  */
 for (const role of Object.keys(users) as Role[]) {
   test(`sign in as ${role}`, async () => {
@@ -47,9 +50,11 @@ for (const role of Object.keys(users) as Role[]) {
 
       if ((await meStatus(page.request)) !== 200) {
         try {
-          const loginPage = new LoginPage(page);
-          await loginPage.googleButton.waitFor({ timeout: 30_000 });
-          const google = await loginPage.openGoogleSignIn();
+          const googleButton = page.getByRole('button', { name: /sign in with google/i });
+          await googleButton.waitFor({ timeout: 30_000 });
+          const popup = page.waitForEvent('popup');
+          await googleButton.click();
+          const google = new GoogleSignInComponent(await popup);
           const account = users[role]();
           if (!account.email) throw new Error('no account email in .env');
           await google.signIn(account);

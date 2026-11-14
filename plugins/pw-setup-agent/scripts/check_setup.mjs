@@ -4,7 +4,7 @@
  * pw-setup-agent conventions.
  *
  *   node check_setup.mjs                  levels 1-2 (read-only), project at the repo root
- *   node check_setup.mjs --root tests     project in a sub-folder
+ *   node check_setup.mjs --root tests     a 0.1.0/0.2.0 project in a sub-folder
  *   node check_setup.mjs --json           machine-readable output
  *
  * Level 1 - structure: folders, config, tsconfig, .gitignore, env files, manifest.
@@ -24,7 +24,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 
 const USAGE = 'usage: check_setup.mjs [--root DIR] [--json]';
 
@@ -68,6 +68,11 @@ const results = [];
  * status: pass | warn | fail | info | skip
  */
 function report(level, title, status, { detail = '', hint = '', skill = '', locations = [] } = {}) {
+  // Findings only in files that existed before pw-setup (the app's own tests) are warnings.
+  if (status === 'fail' && locations.length && locations.every((l) => PREEXISTING.has(l.replace(/:\d+$/, '')))) {
+    status = 'warn';
+    detail = `${detail} (in files that existed before pw-setup)`;
+  }
   results.push({ level, title, status, detail, hint, skill, locations });
 }
 
@@ -172,6 +177,15 @@ if (has('pw-setup.json')) {
 }
 const TSCONFIG = manifest?.configs?.tsconfig ?? 'tsconfig.json';
 const SPLIT = TSCONFIG !== 'tsconfig.json';
+// Folders and files from the manifest (0.3.0 adopts existing ones); 0.1.0/0.2.0 defaults otherwise.
+const DIRS = { specs: 'specs', pages: 'pages', fixtures: 'fixtures', testData: 'test-data', utils: 'utils', ...manifest?.folders };
+const PW_CONFIG = manifest?.configs?.playwright;
+/** testDir as recorded: './e2e', or null when the adopted config sets none (Playwright then searches everywhere). */
+const TEST_DIR = manifest?.configs && 'testDir' in manifest.configs ? manifest.configs.testDir : './specs';
+/** Files that existed before pw-setup (adopted): their own settings are the app's choice. */
+const ADOPTED = new Set(manifest?.adopted ?? []);
+/** Files in the test folders before pw-setup ran (the app's own tests). */
+const PREEXISTING = new Set(manifest?.preexisting ?? []);
 const PM = manifest?.packageManager ?? 'npm';
 const SCRIPT = { envInit: 'env:init', ...manifest?.scripts };
 const RUN = { npm: 'npm run', pnpm: 'pnpm', yarn: 'yarn', bun: 'bun run' }[PM] ?? 'npm run';
@@ -185,7 +199,7 @@ const cmdArgs = (key, args) => `${cmd(key)}${PM === 'npm' ? ' --' : ''} ${args}`
 const L1 = 'Structure';
 
 {
-  const required = ['specs', 'pages', 'fixtures', 'test-data', 'utils'];
+  const required = [DIRS.specs, DIRS.pages, DIRS.fixtures, DIRS.testData, DIRS.utils];
   const missing = required.filter((d) => !has(d) || !statSync(abs(d)).isDirectory());
   if (missing.length) {
     report(L1, 'Folders', 'fail', {
@@ -198,7 +212,7 @@ const L1 = 'Structure';
   }
 }
 
-const configFile = ['playwright.config.ts', 'playwright.config.mts'].find(has);
+const configFile = [PW_CONFIG, 'playwright.config.ts', 'playwright.config.mts', 'playwright.config.js', 'playwright.config.mjs', 'playwright.config.cjs'].filter(Boolean).find(has);
 const config = configFile ? stripComments(read(configFile)) : null;
 
 if (!configFile) {
@@ -215,19 +229,22 @@ if (!configFile) {
       report(L1, 'Config: tsconfig', 'pass', { detail: `'./${TSCONFIG}'` });
     } else {
       report(L1, 'Config: tsconfig', 'fail', {
-        detail: `playwright.config.ts does not point at ${TSCONFIG}`,
+        detail: `${configFile} does not point at ${TSCONFIG}`,
         hint: `Add tsconfig: './${TSCONFIG}' so Playwright resolves the @pages, @fixtures, @data and @utils aliases.`,
         skill: 'pw-core-config',
       });
     }
   }
 
-  if (/testDir\s*:\s*['"`]\.?\/?specs\/?['"`]/.test(config)) {
-    report(L1, 'Config: testDir', 'pass', { detail: "'./specs'" });
+  const specsRe = DIRS.specs.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (new RegExp(`testDir\\s*:\\s*['"\`]\\.?/?${specsRe}/?['"\`]`).test(config)) {
+    report(L1, 'Config: testDir', 'pass', { detail: `'./${DIRS.specs}'` });
+  } else if (TEST_DIR === null && !/\btestDir\s*:/.test(config)) {
+    report(L1, 'Config: testDir', 'pass', { detail: `not set (adopted config); specs live in ${DIRS.specs}/` });
   } else {
     report(L1, 'Config: testDir', 'fail', {
-      detail: 'testDir is not ./specs',
-      hint: "Set testDir: './specs' so only specs are collected.",
+      detail: `testDir is not ./${DIRS.specs}`,
+      hint: `Set testDir: './${DIRS.specs}' (the folder pw-setup.json records for specs), or move the specs there.`,
       skill: 'pw-core-config',
     });
   }
@@ -264,8 +281,29 @@ if (!has(TSCONFIG)) {
   }
   if (ts) {
     const co = ts.compilerOptions || {};
-    if (co.strict === true) report(L1, 'TypeScript: strict', 'pass');
-    else {
+    // strict and baseUrl may come from a relative `extends` (tsconfig.e2e.json extends the app's tsconfig.json).
+    let strict = co.strict;
+    let baseUrl = typeof co.baseUrl === 'string' ? co.baseUrl : undefined;
+    let cfgDir = '.';
+    for (let cfg = ts, guard = 0; (strict === undefined || baseUrl === undefined) && typeof cfg.extends === 'string' && cfg.extends.startsWith('.') && guard < 5; guard++) {
+      const parent = join(cfgDir, cfg.extends.endsWith('.json') ? cfg.extends : `${cfg.extends}.json`);
+      try {
+        cfg = parseJsonc(read(parent));
+      } catch {
+        break;
+      }
+      cfgDir = dirname(parent);
+      if (strict === undefined) strict = cfg.compilerOptions?.strict;
+      if (baseUrl === undefined && typeof cfg.compilerOptions?.baseUrl === 'string') baseUrl = join(cfgDir, cfg.compilerOptions.baseUrl);
+    }
+    if (strict === true) report(L1, 'TypeScript: strict', 'pass');
+    else if (ADOPTED.has(TSCONFIG) || (SPLIT && ADOPTED.has('tsconfig.json'))) {
+      report(L1, 'TypeScript: strict', 'warn', {
+        detail: `strict is off in the app's ${TSCONFIG}`,
+        hint: 'The app owns this setting; turn it on when the app is ready. Strict types catch test bugs early.',
+        skill: 'pw-core-config',
+      });
+    } else {
       report(L1, 'TypeScript: strict', 'fail', {
         detail: 'compilerOptions.strict is not true',
         hint: 'Set "strict": true. Type errors are cheaper to find than test failures.',
@@ -277,9 +315,12 @@ if (!has(TSCONFIG)) {
     const expected = ['@pages/*', '@fixtures', '@data/*', '@utils/*'];
     const missingAliases = expected.filter((a) => !paths[a]);
     const broken = [];
-    for (const [alias, targets] of Object.entries(paths)) {
-      for (const t of targets) {
-        const base = t.replace(/\/\*$/, '');
+    // Targets resolve against baseUrl when set. Only the test project's aliases are checked;
+    // an adopted tsconfig's other aliases belong to the app.
+    const aliasBase = baseUrl ?? '.';
+    for (const [alias, targets] of Object.entries(paths).filter(([a]) => expected.includes(a) || a === '@fixtures/*')) {
+      for (const t of [targets].flat()) {
+        const base = join(aliasBase, t.replace(/\/\*$/, ''));
         const candidates = [base, `${base}.ts`, join(base, 'index.ts')];
         if (!candidates.some((c) => has(c))) broken.push(`${alias} -> ${t}`);
       }
@@ -328,11 +369,11 @@ const exampleKeys = has('.env.example') ? envKeys(read('.env.example')) : null;
 {
   const sources = [
     ...(configFile ? [configFile] : []),
-    ...listFiles('utils', (n) => n.endsWith('.ts')),
-    ...listFiles('test-data', (n) => n.endsWith('.ts')),
-    ...listFiles('fixtures', (n) => n.endsWith('.ts')),
-    ...listFiles('pages', (n) => n.endsWith('.ts')),
-    ...listFiles('specs', (n) => n.endsWith('.ts')),
+    ...listFiles(DIRS.utils, (n) => n.endsWith('.ts')),
+    ...listFiles(DIRS.testData, (n) => n.endsWith('.ts')),
+    ...listFiles(DIRS.fixtures, (n) => n.endsWith('.ts')),
+    ...listFiles(DIRS.pages, (n) => n.endsWith('.ts')),
+    ...listFiles(DIRS.specs, (n) => n.endsWith('.ts')),
   ];
   const used = new Map();
   const patterns = [
@@ -419,18 +460,18 @@ if (manifest) {
 
 const L2 = 'Conventions';
 
-const pageFiles = listFiles('pages', (n) => n.endsWith('.page.ts')).filter((f) => !f.endsWith('base.page.ts'));
-const componentFiles = listFiles('pages', (n) => n.endsWith('.component.ts'));
-const specFiles = listFiles('specs', (n) => /\.(spec|test)\.ts$/.test(n));
-const setupFiles = listFiles('specs', (n) => n.endsWith('.setup.ts'));
-const fixtureFiles = listFiles('fixtures', (n) => n.endsWith('.ts'));
+const pageFiles = listFiles(DIRS.pages, (n) => n.endsWith('.page.ts')).filter((f) => !f.endsWith('base.page.ts'));
+const componentFiles = listFiles(DIRS.pages, (n) => n.endsWith('.component.ts'));
+const specFiles = listFiles(DIRS.specs, (n) => /\.(spec|test)\.ts$/.test(n));
+const setupFiles = listFiles(DIRS.specs, (n) => n.endsWith('.setup.ts'));
+const fixtureFiles = listFiles(DIRS.fixtures, (n) => n.endsWith('.ts'));
 const code = (rel) => stripComments(read(rel));
 
 {
   if (!pageFiles.length) {
     report(L2, 'Page objects', 'warn', {
-      detail: 'no *.page.ts files in pages/',
-      hint: 'Put each page in pages/<name>.page.ts, extending BasePage.',
+      detail: `no *.page.ts files in ${DIRS.pages}/`,
+      hint: `Put each page in ${DIRS.pages}/<name>.page.ts, extending BasePage.`,
       skill: 'pw-page-objects',
     });
   } else {
@@ -507,7 +548,7 @@ const code = (rel) => stripComments(read(rel));
   } else if (specFiles.length) {
     report(L2, 'Specs import from @fixtures', 'pass', { detail: plural(specFiles.length, 'spec file') });
   } else {
-    report(L2, 'Specs import from @fixtures', 'warn', { detail: 'no spec files in specs/', skill: 'pw-page-objects' });
+    report(L2, 'Specs import from @fixtures', 'warn', { detail: `no spec files in ${DIRS.specs}/`, skill: 'pw-page-objects' });
   }
 }
 

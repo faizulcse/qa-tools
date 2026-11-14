@@ -25,10 +25,15 @@ spec) to copy from.
 
 | What | Where | Name |
 |---|---|---|
-| Page object | `pages/` | `settings.page.ts` → `class SettingsPage extends BasePage` |
+| Page object | `pages/` (`page-objects/` in Next.js/Nuxt apps) | `settings.page.ts` → `class SettingsPage extends BasePage` |
 | Component (shared UI) | `pages/components/` | `nav.component.ts` → `class NavComponent` |
 | Fixture registration | `fixtures/pages.fixture.ts` | `settingsPage` |
-| Spec | `specs/<feature>/` | `settings.spec.ts` |
+| Spec | `specs/<feature>/` (or the adopted `testDir`, e.g. `e2e/<feature>/`) | `settings.spec.ts` |
+
+`pw-setup.json` names the actual folders under `folders`. Imports use the
+aliases (`@pages/...`), so they don't depend on the folder names. The app's
+own page objects and specs that existed before setup keep their style; write
+new ones by these rules, and don't rewrite the old ones unless asked.
 
 ## Page object rules
 
@@ -94,5 +99,5 @@ creates one with `new`.
 
 ```bash
 npm run typecheck && npm run lint && npm run check     # merged: pw:typecheck, pw:lint, pw:check
-npx playwright test specs/<feature> --project=chromium
+npx playwright test <specs folder>/<feature> --project=chromium
 ```

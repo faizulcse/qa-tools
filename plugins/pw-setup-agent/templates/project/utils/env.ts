@@ -36,7 +36,7 @@ export function optionalEnv(name: string, fallback = ''): string {
 function resolveBaseUrl(): string {
   const raw = requireEnv('{{ENV_PREFIX}}BASE_URL');
   if (!raw.includes('{ENVIRONMENT}')) return raw;
-  return raw.replaceAll('{ENVIRONMENT}', requireEnv('{{ENV_PREFIX}}ENVIRONMENT'));
+  return raw.split('{ENVIRONMENT}').join(requireEnv('{{ENV_PREFIX}}ENVIRONMENT'));
 }
 
 const environment = optionalEnv('{{ENV_PREFIX}}ENVIRONMENT');

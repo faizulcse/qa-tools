@@ -3,7 +3,7 @@
  *
  * Each role's session is a Playwright storage-state JSON file,
  * .auth/<role>.json, which the test projects load. The setup step
- * (specs/auth/auth.setup.ts) reuses it while it is younger than
+ * ({{SPECS_DIR}}/auth/auth.setup.ts) reuses it while it is younger than
  * AUTH_MAX_AGE_MINUTES and the who-am-I endpoint still answers 200 with it;
  * otherwise it signs in again through Chrome and rewrites it.
  * Everything under .auth/ is gitignored.

@@ -6,8 +6,12 @@ qa-tools marketplace 0.5.0.
 Google SSO login (`--auth google-sso`) was tested against a mock app and still
 needs a run against real Google; it includes the auth setup step and session
 reuse below. Session reuse for the username/password template is still Phase 2.
-Next: **0.3.0, always the root and amend what exists** (planned below; code
-changes wait for approval).
+Next: **0.3.0, always the root and amend what exists** is built and tested
+against seven scenario repos (not released yet). Differences from the plan
+found while building: apps targeting older than ES2017 also get the
+`tsconfig.e2e.json` exception; `pw-setup.json` also records `preexisting`
+files so pw-check softens findings in them; the Google setup step no longer
+uses `LoginPage`.
 
 ### Phase 1 notes (changes from the original plan)
 

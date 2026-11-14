@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.3.0 - unreleased
+
+Setup **always builds the project at the repository root** and **adopts
+whatever is already there**, amending it instead of refusing or asking.
+
+- **Removed:** the sub-folder mode and `scaffold.mjs --root`, `--split-configs`
+  and `--reuse-env-keys`; the blockers for an existing Playwright setup,
+  Next.js/Nuxt and non-empty project folders; the split-config and env-key
+  decisions. Setup stops only for Node/npm, not being at the repo root, an
+  invalid `package.json`, or an existing `pw-setup.json`.
+- **Existing Playwright config:** kept, with its `testDir` (new specs go
+  there), projects and reporters. The dry run lists what the skill adds
+  (`baseURL` from env, a hard-coded `baseURL` becoming the `BASE_URL` default,
+  failure artifacts, a CI reporter, the Google `setup` project). Existing
+  `@playwright/test` is kept at the app's version (a note below 1.45).
+- **`tsconfig.json` amended in place** with a comment-preserving JSONC editor:
+  test aliases (relative to `baseUrl`, inherited aliases carried over), the
+  test folders in `include`, `node` types; `strict`/`target`/`module` never
+  change. Apps on `nodenext` resolution or a target older than ES2017 get a
+  `tsconfig.e2e.json` that extends theirs.
+- **ESLint config amended** by the skill (flat or `.eslintrc*`), from a block
+  the dry run prints. `pw:lint` lints the test folders with the app's config.
+- **Existing folders and files used:** same-named files kept; missing exports
+  or fixture registrations in kept files are listed for the skill; the app's
+  own page objects are kept and the example specs adapted to them.
+- **Next.js/Nuxt:** page objects in `page-objects/`, `@pages` points there.
+- **Env keys reused** (`BASE_URL`...) without asking; `--env-prefix` optional.
+- New dry-run marks: `~` amended by the script, `>` amended by the skill
+  (with `AMEND` sections), `=` kept.
+- `pw-setup.json` records `folders`, the Playwright config and `testDir`,
+  `adopted` files and `preexisting` files. pw-check reads them: folder and
+  `testDir` checks follow the project, findings only in pre-existing files are
+  warnings, `strict` off in the app's tsconfig is a warning, and alias and
+  `strict` checks follow `extends`.
+- Templates avoid ES2021+ APIs (`replaceAll`, `Promise.any`) so they compile
+  under more app tsconfigs. The Google setup step no longer depends on
+  `LoginPage`, so it works next to the app's own page objects.
+- `detect_env.mjs` reports what will be adopted (`ADOPTS:` lines) and an
+  older `tests/` project.
+
 ## 0.2.0 - 2026-11-14
 
 The project is now created at the **repository root** by default.

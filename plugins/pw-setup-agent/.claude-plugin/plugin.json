@@ -1,7 +1,7 @@
 {
   "name": "pw-setup-agent",
-  "version": "0.2.0",
-  "description": "Sets up and maintains a Playwright + TypeScript test project at the repository root (merged safely into an existing app) or in a sub-folder, using page objects, fixtures and typed test data, and checks that the project follows the conventions and works. No MCP servers required.",
+  "version": "0.3.0",
+  "description": "Sets up and maintains a Playwright + TypeScript test project at the repository root, adopting and amending whatever is already there (app, Playwright config, tsconfig, ESLint, folders), using page objects, fixtures and typed test data, and checks that the project follows the conventions and works. No MCP servers required.",
   "author": {
     "name": "MD. FAIZUL ISLAM"
   },

@@ -15,7 +15,7 @@ export default defineConfig([
     extends: [tseslint.configs.recommended],
   },
   {
-    files: ['specs/**/*.ts'],
+    files: ['{{SPECS_DIR}}/**/*.ts'],
     extends: [playwright.configs['flat/recommended']],
     rules: {
       'playwright/no-wait-for-timeout': 'error',
@@ -28,7 +28,7 @@ export default defineConfig([
   },
   {
     // Auth setup steps branch on whether a saved session is still valid.
-    files: ['specs/**/*.setup.ts'],
+    files: ['{{SPECS_DIR}}/**/*.setup.ts'],
     rules: {
       'playwright/no-conditional-in-test': 'off',
     },
