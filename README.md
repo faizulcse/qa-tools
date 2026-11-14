@@ -163,8 +163,9 @@ Full documentation: [`plugins/git-agent/README.md`](plugins/git-agent/README.md)
 | `pw-core-config` | "add Firefox", "change the base URL" | Changes to `playwright.config.ts` and `.env` |
 
 It writes spec files. To drive a browser by hand without writing code, use
-qa-agent's `qa-test-ui`. The plan is in
-[`docs/plans/pw-setup-agent.md`](docs/plans/pw-setup-agent.md).
+qa-agent's `qa-test-ui`.
+
+Full documentation: [`plugins/pw-setup-agent/README.md`](plugins/pw-setup-agent/README.md).
 
 ## Updating
 
