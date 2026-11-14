@@ -1,6 +1,6 @@
 # pw-setup-agent: Plan
 
-Status: Phase 1 built (not yet in the marketplace). Target release: pw-setup-agent 0.1.0, qa-tools marketplace 0.4.0.
+Status: Phase 1 released as pw-setup-agent 0.1.0 in qa-tools marketplace 0.4.0.
 
 ### Phase 1 notes (changes from the original plan)
 

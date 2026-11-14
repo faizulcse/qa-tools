@@ -1,7 +1,7 @@
 {
   "name": "qa-tools",
   "metadata": {
-    "version": "0.3.0"
+    "version": "0.4.0"
   },
   "owner": {
     "name": "MD. FAIZUL ISLAM",
@@ -21,6 +21,13 @@
       "version": "0.1.0",
       "description": "Drafts a commit message - title and description - from the current working-tree changes, matched to the repository's existing commit style. Presents the draft for review and never commits without an explicit go-ahead. No MCP servers.",
       "keywords": ["git", "commit", "commit-message", "conventional-commits", "developer-tools"]
+    },
+    {
+      "name": "pw-setup-agent",
+      "source": "./plugins/pw-setup-agent",
+      "version": "0.1.0",
+      "description": "Sets up and maintains a Playwright + TypeScript test project in tests/ using page objects, fixtures and typed test data, and checks that the project follows the conventions and works. No MCP servers.",
+      "keywords": ["playwright", "typescript", "e2e", "page-object-model", "test-automation", "scaffold"]
     }
   ]
 }
