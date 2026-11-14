@@ -19,6 +19,7 @@ happened without writing code, use qa-agent's `qa-test-ui` instead.
 | **pw-setup** | "set up Playwright", "scaffold e2e tests", "add Playwright with TypeScript", "set up a page object model project" | A test project at the repo root, adopting what's already there, installed and verified, with a short handover |
 | **pw-check** | "check my Playwright setup", "does my framework follow the conventions", "audit my page objects" | A read-only report: each rule as pass, warning or failure, with file, line and fix |
 | **pw-page-objects** | "create a page object", "add a component", "write a spec for this page", "register a fixture" | Page objects, components, fixtures and specs written the project's way |
+| **pw-login** | "sign me in for the tests", "refresh the test session", "who-am-I returns 401" | Google sign-in with you: checks the saved session, opens the browser for you to sign in, saves it, and explains what went wrong if it fails |
 | **pw-locators** | "which locator should I use", "fix this flaky selector", "strict mode violation", "replace XPath" | Role- and label-based locators, patterns for hard cases, correct waits |
 | **pw-core-config** | "add a browser", "run against staging", "change the timeout", "set retries", "add mobile testing" | Safe changes to `playwright.config.ts` and the tsconfig, explained |
 
@@ -186,6 +187,13 @@ installed Chrome). `BASE_URL` may contain `{ENVIRONMENT}`, filled from
 | `login:cli` | Runs `login-cli.mjs` directly (`login:cli -- viewer` for another role) |
 | `test` | Runs setup (instant when the session is valid), then the tests |
 
+In a Claude session you can also just say "sign me in for the tests": the
+`pw-login` skill checks the saved session first (headless), opens the same
+window if needed, waits for you, saves the session, and if something goes
+wrong (Google refusing the browser, a wrong who-am-I endpoint) looks at the
+page and its requests and tells you why. It never types your Google
+details.
+
 The first run needs you at the screen. Later runs don't open a browser for
 setup. After an hour, or when the app rejects the session, the browser opens
 again on the same profile; because it remembers your Google account, signing
@@ -269,6 +277,7 @@ failures.
 | `skills/pw-page-objects/` | Page object, fixture and spec conventions, with `references/examples.md` |
 | `skills/pw-locators/` | Locator priority and waits, with `references/patterns.md` |
 | `skills/pw-core-config/SKILL.md` | Config and tsconfig settings |
+| `skills/pw-login/SKILL.md` | Google sign-in with the user through playwright-cli, and finding the who-am-I endpoint |
 | `templates/project/` | The project files (dotfiles stored without the dot, `tsconfig.json` as `tsconfig.json.tmpl`) |
 | `templates/auth/google-sso/` | Files that replace or add to the project for Google sign-in |
 

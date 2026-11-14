@@ -28,6 +28,16 @@ whatever is already there**, amending it instead of refusing or asking.
   credentials are stored. New script `login:cli`; `@playwright/cli` 0.1.24 is
   a dev dependency; the `setup` project's timeout follows the login timeout;
   `.playwright-cli/` is gitignored. `test-data/users.ts` lists the roles.
+- **New `pw-login` skill:** Google sign-in with the user in a Claude
+  session, through playwright-cli. Checks the saved session headlessly
+  (`state-load` + who-am-I) and stops if it's valid; otherwise opens the same
+  headed window and profile as `login-cli.mjs`, waits for the user to sign in
+  by hand, saves `.auth/<role>.json` and confirms it. When something is off it
+  reads the page (`snapshot`, the popup tab) and `requests` to explain it:
+  Google refusing the browser, a wrong who-am-I endpoint (offers the fix in
+  `pw-setup.json`, `utils/auth.ts` and `utils/login-cli.mjs`), a token-based
+  session. Also finds the who-am-I endpoint for `pw-setup` (the 401 request on
+  the login page). Never types or stores Google credentials.
 
 - **Removed:** the sub-folder mode and `scaffold.mjs --root`, `--split-configs`
   and `--reuse-env-keys`; the blockers for an existing Playwright setup,

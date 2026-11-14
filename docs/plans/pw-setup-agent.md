@@ -10,7 +10,9 @@ Next: **0.3.0, always the root and amend what exists** is built and tested
 against seven scenario repos (not released yet). The spec folder is `tests/`
 (was `specs/`); see "Specs folder: tests/" below. Google sign-in now goes
 through playwright-cli (`utils/login-cli.mjs`); see "Sign-in through
-playwright-cli (0.3.0)" in the Google SSO section. Differences from the plan
+playwright-cli (0.3.0)" in the Google SSO section. The `pw-login` skill
+(Google sign-in with the user through playwright-cli) is built; see "The
+`pw-login` skill". Differences from the plan
 found while building: apps targeting older than ES2017 also get the
 `tsconfig.e2e.json` exception; `pw-setup.json` also records `preexisting`
 files so pw-check softens findings in them; the Google setup step no longer
@@ -416,6 +418,7 @@ tests/
 | **pw-test-data** | "test data", "factory", "unique users" | Typed builders with faker, seeds, uniqueness for parallel runs, static data, credentials from env, cleanup through the API in `afterEach` |
 | **pw-auth** | "login once", "storageState", "multiple roles", "session expired" | Setup project plus `storageState`, one JSON session file per role, the 1-hour reuse rule (see Auth sessions), logging in through the API vs the UI, refreshing expired sessions, keeping `.auth/` out of git, test-scoped login for auth tests themselves |
 | **pw-artifacts** | "trace", "screenshots", "report", "CI artifacts" | `trace: 'on-first-retry'`, `screenshot: 'only-on-failure'`, `video: 'retain-on-failure'`, `outputDir`, reporters (html and list locally, blob on CI), merging sharded reports, downloading and opening a trace from a failed Actions run |
+| **pw-login** | "sign me in for the tests", "refresh the test session", "who-am-I returns 401" | Google sign-in with the user via playwright-cli: checks the saved session headlessly, opens the sign-in window, waits for the user, saves `.auth/<role>.json`, diagnoses failures from snapshots and requests, finds the who-am-I endpoint for `pw-setup`. See "The `pw-login` skill" |
 | **pw-best-practices** | "review my tests", "why is this flaky" | Explains `pw-check` findings: no `waitForTimeout`, web-first assertions (`await expect(...)`), no `page.$`, isolated tests, no `test.only`, no hard-coded credentials, tags (`@smoke`), `test.step` |
 
 Keep descriptions from overlapping: `pw-best-practices` is about *reviewing*
@@ -668,6 +671,146 @@ reference project's `utils/login-cli.mjs` and `utils/auth.ts`, made generic
   merged `E2E_` two-role case type-checks and lints. Real Google still needs a
   run on a real project.
 
+### The `pw-login` skill (0.3.0)
+
+Status: built (`skills/pw-login/SKILL.md`), tested against the mock app; real
+Google still needs a run on a real project. One addition while building: the
+Google popup opens as a second tab, so the troubleshooting steps use
+`tab-list` / `tab-select` before taking its snapshot. The headless check
+also does a `goto` after `state-load`, so the page runs with the loaded
+session.
+
+A skill that does the Google sign-in **with the user, in a Claude session**,
+using playwright-cli directly. It runs the same steps as `utils/login-cli.mjs`
+and adds what a script can't: checking the session first, looking at the
+page when something is off, and explaining failures. `login-cli.mjs` stays
+the one path for `npx playwright test`, the `login` scripts, teammates
+without Claude, and the setup step; the skill sits next to it and never
+replaces it.
+
+**Scope:** projects with `auth.mode: google-sso` in `pw-setup.json`. A
+username/password project gets a pointer to the setup step (its session reuse
+is Phase 2, `pw-auth`). Kept apart from the planned `pw-auth` skill: `pw-auth`
+explains how auth is configured; `pw-login` signs in now.
+
+**Triggers:** "sign me in for the tests", "log in to the app", "refresh the
+test session", "my session expired", "the auth setup fails", "who-am-I
+returns 401", "set up the Google login" (after `pw-setup`), "which endpoint
+is the who-am-I".
+
+#### Flow
+
+1. **Read the project.** `pw-setup.json` (auth mode, `meEndpoint`,
+   `loginPath`, roles, env prefix), `.env` for `BASE_URL`/`ENVIRONMENT`
+   (key names and the URL only; never print other values). Find
+   playwright-cli: the project's `node_modules/.bin/playwright-cli`, else a
+   global one; if neither, offer the project install.
+2. **Check the saved session first** (no visible window). For each role
+   asked for (default: the first): file age against `AUTH_MAX_AGE_MINUTES`,
+   then a headless check:
+   `playwright-cli -s=check-<role> open <base URL>`,
+   `playwright-cli -s=check-<role> state-load .auth/<role>.json`,
+   `playwright-cli -s=check-<role> --raw eval "async () => (await fetch('<meEndpoint>', { credentials: 'include' })).status"`,
+   `close`. 200 and fresh: report "still signed in (N min old)" and stop,
+   unless the user asked to sign in again.
+3. **Open the sign-in window.** Tell the user a browser is about to open and
+   that they will sign in themselves, then
+   `playwright-cli -s=auth-<role> open <base URL + loginPath> --browser chrome --headed --persistent --profile .auth/cli-profile/<role>`.
+   Same session name and profile as `login-cli.mjs`, so the two share the
+   remembered Google account.
+4. **Wait for the user.** Ask them to sign in, including any verification,
+   and to say when they're done. Then check who-am-I with the same `--raw
+   eval`; if it isn't 200 yet, check again a few times a few seconds apart
+   before asking them what they see.
+5. **Save.** `state-save .auth/<role>.json.tmp.json`, rename to
+   `.auth/<role>.json`, `close`. Confirm with the headless check from step 2.
+   Repeat for the next role if more were asked for.
+6. **Hand over.** One line: which roles are signed in, the session age
+   limit, and that `npx playwright test` will reuse the session without
+   opening a browser.
+
+#### When something is off
+
+Take a `snapshot` of the sign-in window (and `requests` when the page made
+API calls) and say what's on it, in plain words:
+
+| What the page shows | What the skill says or does |
+|---|---|
+| "This browser or app may not be secure" | Google refused this browser. Explain it; don't retry with tricks. Suggest the user try again in the same window after closing other Chrome windows on that profile, or sign in on a project where Google accepts it, and report back |
+| Still on the app's sign-in screen after the user says done | The popup may have been blocked or closed early; ask the user to click "Sign in with Google" again |
+| Signed in on the page, but who-am-I is not 200 | Look at `requests` for the app's own "who am I" call. If it is a different path, offer to correct `meEndpoint` in `pw-setup.json`, `utils/auth.ts` and `utils/login-cli.mjs` (all three, shown first). If the session lives in a token in localStorage rather than a cookie, explain that `fetch` with cookies can't see it and the endpoint check needs adapting |
+| Who-am-I redirects (3xx) or answers on another host | Explain; the endpoint must answer 200/401 on the app's own origin |
+| The profile is open elsewhere / the session won't open | `playwright-cli close-all`, then retry once |
+
+#### Finding the who-am-I endpoint (used by `pw-setup`)
+
+`pw-setup` Step 1 hands this to `pw-login` instead of guessing:
+`open` the login page headless, then `requests`, and pick the request to the
+app's own origin that answered **401** (an API path, not a page or asset);
+show it with `request <n>` and confirm it with the user. Prefer paths such as
+`/api/me`, `/api/auth/session`, `/api/user`, `.../me`. If nothing answers 401
+while signed out, say so: the app may need a different check, and Google
+sign-in templates aren't a fit until one exists.
+
+#### Rules
+
+- **Sign-in is by hand.** Never type, ask for or store the user's Google
+  email, password or verification codes; never click through Google's screens
+  for them; never work around Google's checks (flags, user agents, stealth).
+- **Only with the user at the screen.** Say before opening a visible window,
+  and never open one in a background or unattended run. On CI, refuse and
+  explain the two CI options.
+- **Never print secrets.** No `.env` values other than the base URL, no
+  cookie or token contents from the session file or `request` output (redact
+  `cookie`, `authorization` and `set-cookie` headers when showing a request).
+- **Same files as the script.** `.auth/<role>.json`, `.auth/cli-profile/<role>/`,
+  session `auth-<role>`; the headless check uses its own `check-<role>`
+  session so it never disturbs an open sign-in window.
+- **Run playwright-cli from the project root** (it keeps its working files in
+  `.playwright-cli/`, which the template gitignores).
+
+#### Files
+
+- `skills/pw-login/SKILL.md` (new): the flow, the troubleshooting table and
+  the rules above. No new script: it uses playwright-cli commands, and the
+  headless check in step 2 is short enough to run inline.
+- `skills/pw-setup/SKILL.md`: Step 1 uses `pw-login`'s endpoint discovery;
+  the Google hand-over offers "I can sign you in now" (`pw-login`) next to the
+  `login` script.
+- `README.md`: the skill in "What it does" and a line in the Google sign-in
+  section.
+- `CHANGELOG.md`: 0.3.0 entry.
+
+#### Testing
+
+Against the mock app (no real Google), in a scratch project scaffolded with
+`--auth google-sso`:
+
+1. Valid session → the skill reports "still signed in" from the headless
+   check; no window opens.
+2. No session → window opens, the "user" signs in (second playwright-cli
+   command), the skill saves `.auth/<role>.json`; `npx playwright test`
+   then reuses it.
+3. Wrong `meEndpoint` → after sign-in, `requests` shows the real endpoint;
+   the skill proposes the fix in all three files.
+4. Blocked screen (mock "not secure" page) → the skill explains it and stops.
+5. Endpoint discovery on the mock login page → finds the 401 request.
+6. Password-mode project → the skill says it doesn't apply and points to the
+   setup step.
+
+Results (2026-11-15, mock app, the skill's commands run step by step):
+
+| # | Result |
+|---|---|
+| 1 | Pass: the headless check returns 200 with the saved session (401 without one) |
+| 2 | Pass: 401 before, the "user" signs in, 200 after; `state-save` + rename writes `.auth/admin.json` |
+| 3 | Pass: a wrong endpoint gives 404; `requests` shows the app's own `/api/bff/admin/me` call answering 200 |
+| 4 | Pass: the popup is tab 1; its snapshot shows "This browser or app may not be secure" |
+| 5 | Pass: `requests` on the signed-out login page lists `/api/bff/admin/me => 401` next to a 200 `/api/config` |
+| 6 | Not run: a rule in the skill (reads `auth.mode` from `pw-setup.json`), no commands involved |
+
+Real Google needs one run on a real project before release.
+
 ## The check (`pw-check` / `check_setup.mjs`)
 
 ```
@@ -801,6 +944,7 @@ cd tests && npm run env:init                                        # same, for 
 | 1.5 Root layout (0.2.0) | The modes and merge rules above, script and skill updates, the five test scenarios |
 | 1.6 Google SSO (0.2.0) | `--auth google-sso`: the auth setup step with session reuse, Chrome profile over CDP, Google sign-in component, SSO login/home specs, login scripts, skill and README updates |
 | 1.7 Always root, amend (0.3.0) | Amend rules above: adopt existing folders, files, dependencies and configs; tsconfig amended in place; Playwright/ESLint configs amended by the skill; `page-objects/` for Next.js/Nuxt; remove subfolder mode, blockers and decisions; the seven test scenarios |
+| 1.8 `pw-login` skill (0.3.0) | `skills/pw-login/SKILL.md`, the `pw-setup` and README hooks, the six test cases in "The `pw-login` skill" |
 | 2. Data and auth | `pw-test-data` (faker and builders), `pw-auth`, an `auth.setup.ts` for the username/password template with the same session reuse as Google SSO, `utils/env.ts`, check level 3 (`--run`, `--smoke`, env values filled) |
 | 3. Quality and CI | `pw-artifacts`, `pw-best-practices`, `gen_page_object`, the GitHub workflow template, README and CHANGELOG |
 

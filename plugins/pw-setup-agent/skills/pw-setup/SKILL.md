@@ -101,8 +101,9 @@ Then look at how the app signs in. Ask for the app URL if you don't have it
 If the **only** way to sign in is "Sign in with Google", use the Google
 templates (`--auth google-sso`). They need the app's **who-am-I endpoint**: an
 API request that returns 401 while signed out (and 200 once signed in), such
-as `/api/me` or `/api/auth/session`. Pick it from the network calls the login
-page made, and confirm it with the user. Note the path where the button is
+as `/api/me` or `/api/auth/session`. Find it with `pw-login` ("Finding the
+who-am-I endpoint": the login page's requests that answered 401) and confirm
+it with the user. Note the path where the button is
 (`--login-path`, default `/`). Anything else (a username/password form, or
 Google next to other options) uses the default `--auth password` templates.
 
@@ -256,8 +257,9 @@ For Google sign-in, replace point 2 with:
    and the tests run signed in. Later runs reuse it without opening a
    browser; after an hour, or when the app rejects it, the browser opens
    again on the same profile, which remembers the account. `login:force`
-   signs in again now; `login:cli` runs the script directly. Also adjust the
-   button name and `HomePage.waitForReady()` if needed.
+   signs in again now; `login:cli` runs the script directly. Offer to do the
+   first sign-in together now (`pw-login`), if the user is at the screen.
+   Also adjust the button name and `HomePage.waitForReady()` if needed.
 
 and add:
 
