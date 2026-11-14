@@ -1,7 +1,7 @@
 {
   "name": "qa-tools",
   "metadata": {
-    "version": "0.4.0"
+    "version": "0.4.1"
   },
   "owner": {
     "name": "MD. FAIZUL ISLAM",
@@ -11,7 +11,7 @@
     {
       "name": "qa-agent",
       "source": "./plugins/qa-agent",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "description": "Agentic QA assistant: requirements analysis into risk-ordered test plans, browser execution through playwright-cli commands with a saved page snapshot per step, API testing, structured bug reports, and Jira via a bundled REST client. No MCP servers.",
       "keywords": ["qa", "testing", "manual-testing", "playwright-cli", "jira", "bug-report"]
     },

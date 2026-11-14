@@ -202,11 +202,11 @@ Tag releases if you want people to pin one: `/plugin marketplace add owner/repo@
 
 ## Versions
 
-Marketplace (`qa-tools`): **0.4.0**
+Marketplace (`qa-tools`): **0.4.1**
 
 | Plugin | Version | Changelog |
 | --- | --- | --- |
-| qa-agent | 0.5.0 | [`plugins/qa-agent/CHANGELOG.md`](plugins/qa-agent/CHANGELOG.md) |
+| qa-agent | 0.6.0 | [`plugins/qa-agent/CHANGELOG.md`](plugins/qa-agent/CHANGELOG.md) |
 | git-agent | 0.1.0 | [`plugins/git-agent/CHANGELOG.md`](plugins/git-agent/CHANGELOG.md) |
 | pw-setup-agent | 0.1.0 | [`plugins/pw-setup-agent/CHANGELOG.md`](plugins/pw-setup-agent/CHANGELOG.md) |
 

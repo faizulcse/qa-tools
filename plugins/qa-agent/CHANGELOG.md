@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.0
+
+- **Jira comment template revised.** Template A reports earlier QA feedback as
+  one table per feedback date (newest first) instead of a required Issues found
+  section; Issues found, Questions, Recommendation and the report pointer are
+  now optional. Tickets without ACs use the story requirement as AC1. Status
+  icons add Fixed and Open, the verdict guide counts open earlier feedback,
+  headings drop the ticket key, and the writing rules, formatting notes and
+  posting checklist are updated to match.
+- **`qa-setup.mjs` creates `.env`.** On first run it copies `.env.example` to
+  `.env`; an existing `.env` is left unchanged. (`qa-setup.sh` still creates
+  only `.env.example`.)
+
 ## 0.5.0
 
 - **Jira comment template.** New `templates/jira-comment.md` with two comment
