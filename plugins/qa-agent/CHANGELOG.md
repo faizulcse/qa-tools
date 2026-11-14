@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.1
 
 - **`qa-setup.sh` creates `.env`** too, matching `qa-setup.mjs`: it copies
   `.env.example` to `.env` on the first run and leaves an existing `.env`

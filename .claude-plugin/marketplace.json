@@ -1,7 +1,7 @@
 {
   "name": "qa-tools",
   "metadata": {
-    "version": "0.4.1"
+    "version": "0.5.0"
   },
   "owner": {
     "name": "MD. FAIZUL ISLAM",
@@ -11,7 +11,7 @@
     {
       "name": "qa-agent",
       "source": "./plugins/qa-agent",
-      "version": "0.6.0",
+      "version": "0.6.1",
       "description": "Agentic QA assistant: requirements analysis into risk-ordered test plans, browser execution through playwright-cli commands with a saved page snapshot per step, API testing, structured bug reports, and Jira via a bundled REST client. No MCP servers.",
       "keywords": ["qa", "testing", "manual-testing", "playwright-cli", "jira", "bug-report"]
     },
@@ -25,8 +25,8 @@
     {
       "name": "pw-setup-agent",
       "source": "./plugins/pw-setup-agent",
-      "version": "0.1.0",
-      "description": "Sets up and maintains a Playwright + TypeScript test project in tests/ using page objects, fixtures and typed test data, and checks that the project follows the conventions and works. No MCP servers.",
+      "version": "0.2.0",
+      "description": "Sets up and maintains a Playwright + TypeScript test project at the repository root (merged safely into an existing app) or in a sub-folder, using page objects, fixtures and typed test data, and checks that the project follows the conventions and works. No MCP servers required.",
       "keywords": ["playwright", "typescript", "e2e", "page-object-model", "test-automation", "scaffold"]
     }
   ]
