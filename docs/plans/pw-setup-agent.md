@@ -65,6 +65,7 @@ plugins/pw-setup-agent/
     ├── detect_env.mjs        # Node version, package manager, existing Playwright/config
     ├── scaffold.mjs          # copy templates, fill placeholders, write pw-setup.json
     ├── check_setup.mjs       # the check; also copied to tests/utils/check-setup.mjs
+    ├── init_env.mjs          # create/sync .env from .env.example; copied to tests/utils/init-env.mjs
     └── gen_page_object.mjs   # page object + spec stub + fixture registration
 ```
 
@@ -79,7 +80,8 @@ tests/
 ├── package.json                  # own scripts + @playwright/test (isolated from the app)
 ├── tsconfig.json                 # path aliases @pages/*, @data/*, @fixtures/*, @utils/*
 ├── .nvmrc
-├── .env.example                  # BASE_URL, TEST_ENV, FAKER_SEED, role credentials
+├── .env.example                  # BASE_URL, TEST_ENV, FAKER_SEED, role credentials (committed)
+├── .env                          # created by init-env from .env.example (gitignored)
 ├── .gitignore                    # .auth/, test-results/, playwright-report/, .env
 ├── eslint.config.mjs             # with eslint-plugin-playwright
 ├── pw-setup.json                 # setup manifest, read by the check
@@ -99,7 +101,8 @@ tests/
 │   └── static/countries.ts       # fixed lookup data, typed `as const`
 ├── utils/
 │   ├── env.ts                    # validated env loading, one place
-│   └── check-setup.mjs           # copy of the check, so CI doesn't need the plugin
+│   ├── check-setup.mjs           # copy of the check, so CI doesn't need the plugin
+│   └── init-env.mjs              # copy of init_env, run with `npm run env:init`
 └── .auth/                        # gitignored storageState files
 
 .github/workflows/playwright.yml  # at the repo root
@@ -153,6 +156,7 @@ node scripts/check_setup.mjs --root tests --run --smoke   # + auth setup and smo
 | TypeScript | `tsconfig.json` has `strict: true` and the path aliases resolve |
 | Gitignore | `.auth/`, `.env`, `test-results/` and `playwright-report/` are ignored |
 | Env | `.env.example` exists, and every variable read in `utils/env.ts` (including `FAKER_SEED`) is listed |
+| `.env` file | Locally: `.env` exists and has every key in `.env.example` (⚠️ if missing, hint `npm run env:init`). On CI (`CI` set): skipped, values come from secrets. Always ❌ if `.env` is tracked by git (`git ls-files`) |
 | CI | `.github/workflows/playwright.yml` exists, uses `working-directory: tests`, runs the check step, uploads artifacts on failure |
 
 ### Level 2: conventions (static analysis)
@@ -172,6 +176,7 @@ node scripts/check_setup.mjs --root tests --run --smoke   # + auth setup and smo
 
 | Check | Command |
 |---|---|
+| Env values filled | Required keys in `.env` (`BASE_URL`, role credentials) are not empty; checked before auth and smoke runs. Reports key names only, never values |
 | Dependencies installed | `node_modules/@playwright/test` exists and its version matches `pw-setup.json` |
 | Browsers installed | Browsers in the Playwright cache match the configured projects |
 | Type check | `npx tsc --noEmit` |
@@ -219,17 +224,52 @@ node scripts/check_setup.mjs --root tests --run --smoke   # + auth setup and smo
   Playwright install or config, so `pw-setup` doesn't clobber a project.
 - **`scaffold.mjs`:** `--dry-run` by default (prints planned files); never
   overwrites without `--force` and reports what it skipped; fills placeholders
-  (base URL, roles, browsers, package manager); writes `pw-setup.json`.
+  (base URL, roles, browsers, package manager); writes `pw-setup.json`. After
+  writing the files it runs `init_env.mjs` to create `tests/.env`.
 - **`check_setup.mjs`:** the check above.
+- **`init_env.mjs`:** creates and maintains the local `.env`. See below.
 - **`gen_page_object.mjs Dashboard --url /dashboard`:** creates
   `pages/dashboard.page.ts`, a spec stub, and the fixture registration.
+
+## Creating the .env file (`init_env.mjs`)
+
+```
+node scripts/init_env.mjs --root tests                              # create .env if missing
+node scripts/init_env.mjs --root tests --base-url https://staging.example.com
+node scripts/init_env.mjs --root tests --sync                       # add new keys only
+node scripts/init_env.mjs --root tests --force                      # recreate (backs up to .env.bak)
+
+cd tests && npm run env:init                                        # same, for teammates without the plugin
+```
+
+- **When it runs:** automatically as the last step of `scaffold.mjs` (so
+  `pw-setup` always ends with a `.env`), and on demand through the
+  `env:init` npm script in `tests/package.json`.
+- **Source:** reads `.env.example` and writes `.env` with the same keys,
+  comments and order.
+- **Values it fills:** `BASE_URL` from `--base-url` (or the value chosen
+  during `pw-setup`), `TEST_ENV=local`. `FAKER_SEED` stays empty so each run
+  gets a new seed.
+- **Values it never fills:** passwords, tokens and other secrets stay empty,
+  marked `# fill in locally`. The skill tells the user to open `.env` and
+  fill them in themselves, and never asks for them in chat, so secrets don't
+  pass through the conversation.
+- **Never overwrites:** an existing `.env` is left alone. `--sync` adds keys
+  that are in `.env.example` but missing from `.env` and keeps every existing
+  value. `--force` recreates it after copying the old file to `.env.bak`.
+  `scaffold.mjs --force` does not touch `.env`.
+- **Safety:** before writing, it confirms `.env` is in `.gitignore` and stops
+  if it isn't. Output lists key names and which are still empty, never values.
+- **Runtime hint:** `utils/env.ts` throws a clear error for a missing required
+  variable, e.g. `BASE_URL is not set. Run "npm run env:init" and fill in
+  tests/.env.`
 
 ## Build order
 
 | Phase | Builds |
 |---|---|
-| 1. Working project | `plugin.json`, `pw-setup`, `pw-core-config`, `pw-page-objects`, `pw-locators`, `detect_env`, `scaffold`, `check_setup` levels 1–2, and the config, page, fixture and spec templates |
-| 2. Data and auth | `pw-test-data` (faker and builders), `pw-auth`, `auth.setup.ts`, `utils/env.ts`, check level 3 (`--run`, `--smoke`) |
+| 1. Working project | `plugin.json`, `pw-setup`, `pw-core-config`, `pw-page-objects`, `pw-locators`, `detect_env`, `scaffold`, `init_env`, `check_setup` levels 1–2, and the config, page, fixture, spec and `.env.example` templates |
+| 2. Data and auth | `pw-test-data` (faker and builders), `pw-auth`, `auth.setup.ts`, `utils/env.ts`, check level 3 (`--run`, `--smoke`, env values filled) |
 | 3. Quality and CI | `pw-artifacts`, `pw-best-practices`, `gen_page_object`, the GitHub workflow template, README and CHANGELOG |
 
 Each phase ends with a test scaffold into a temporary folder and a
