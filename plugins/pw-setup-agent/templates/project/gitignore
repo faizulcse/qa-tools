@@ -4,8 +4,11 @@ node_modules/
 /.env
 /.env.bak
 
-# Saved login sessions
+# Saved login sessions and browser profiles
 /.auth/
+
+# playwright-cli working files (snapshots, logs)
+/.playwright-cli/
 
 # Playwright output
 /test-results/

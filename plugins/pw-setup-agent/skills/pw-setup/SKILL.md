@@ -48,8 +48,9 @@ report what happened without writing code, that is `qa-agent:qa-test-ui`.
 ```
 
 With `--auth google-sso` (see "Google sign-in" below) it also adds
-`tests/auth/auth.setup.ts`, `utils/auth.ts`, `utils/chrome-profile.ts`,
-`utils/login-chrome.mjs` and `<pages>/components/google-sign-in.component.ts`,
+`tests/auth/auth.setup.ts`, `utils/auth.ts`, `utils/login-cli.mjs` and
+`<pages>/components/google-sign-in.component.ts`, plus `@playwright/cli` as a
+dev dependency,
 and the login and home pages and specs are the Google versions.
 
 ## How existing things are used
@@ -126,9 +127,8 @@ Chrome profile. The base URL may contain `{ENVIRONMENT}`
 in `.env`.
 
 **Never ask for passwords, usernames, emails, codes or tokens.** Each role
-gets `<ROLE>_USERNAME` and `<ROLE>_PASSWORD` keys in `.env` (Google:
-`<ROLE>` for the account email, optional `<ROLE>_PASSWORD`, optional `OTP`),
-left empty for the user to fill in themselves. If the user pastes credentials
+gets `<ROLE>_USERNAME` and `<ROLE>_PASSWORD` keys in `.env` (Google sign-in
+stores no credentials at all: the user signs in by hand), left empty for the user to fill in themselves. If the user pastes credentials
 into the chat anyway, do not write them anywhere; tell them to put them in
 `.env`.
 
@@ -249,14 +249,15 @@ folders) and what was added, in a few lines; do not paste the file list again.
 For Google sign-in, replace point 2 with:
 
 2. **Sign in once:** run the `login` script (`npm run login`, or
-   `pw:login`). A Chrome window opens on a dedicated profile; the setup step
-   tries the email, password and code from `.env`, and the user finishes by
-   hand whatever it can't (up to 4 minutes). Then the tests run signed in.
-   Later runs reuse `.auth/<role>.json` without opening a browser; after an
-   hour, or when the app rejects it, Chrome reopens and refreshes it, usually
-   without typing. `login:force` signs in again now; `login:chrome` is the
-   manual fallback (instructions at the top of `utils/login-chrome.mjs`).
-   Also adjust the button name and `HomePage.waitForReady()` if needed.
+   `pw:login`). `utils/login-cli.mjs` opens a headed Chrome through
+   playwright-cli on a persistent profile (`.auth/cli-profile/<role>/`); the
+   user signs in by hand, including any verification, within
+   `LOGIN_TIMEOUT_MINUTES` (10). The session is saved to `.auth/<role>.json`
+   and the tests run signed in. Later runs reuse it without opening a
+   browser; after an hour, or when the app rejects it, the browser opens
+   again on the same profile, which remembers the account. `login:force`
+   signs in again now; `login:cli` runs the script directly. Also adjust the
+   button name and `HomePage.waitForReady()` if needed.
 
 and add:
 
@@ -267,14 +268,16 @@ and add:
 
 ## Google sign-in: rules
 
-- **Never** try to make Google accept a Playwright-launched browser (flags,
-  user agents, stealth plugins). Google blocks them on purpose; the setup step
-  uses real Chrome over CDP instead.
-- Don't run the setup step yourself on the user's behalf unless they are at
-  the screen: it opens a Chrome window and may wait for them.
-- If the run fails with "Google blocked the sign-in", the sign-in happened in
-  a Playwright-launched browser (for example a spec that signs in itself).
-  Sign-in belongs only in `tests/auth/auth.setup.ts`, which is
-  self-contained and doesn't depend on the app's page objects.
-- "The Chrome profile ... is already open": a Chrome window still uses
-  `.auth/chrome-profile/<role>/`. Close it and run again.
+- Sign-in is **by hand**, in the window `utils/login-cli.mjs` opens. Never
+  automate Google's screens or try to get around its checks (flags, user
+  agents, stealth plugins), and never put Google credentials in `.env`.
+- Don't run the `login` script or the setup step yourself unless the user is
+  at the screen: it opens a browser and waits for them.
+- If Google says "This browser or app may not be secure", the sign-in
+  happened somewhere else (for example a spec that signs in itself). Sign-in
+  belongs only in `login-cli.mjs`, which `tests/auth/auth.setup.ts` runs; the
+  setup step doesn't depend on the app's page objects.
+- A browser window left open by a failed run: `npx playwright-cli close-all`.
+- Changing the who-am-I endpoint or login path: update both `utils/auth.ts`
+  and `utils/login-cli.mjs` (`ME_ENDPOINT`, `LOGIN_PATH`). Adding a role:
+  `test-data/users.ts` and `ROLES` in `login-cli.mjs`.

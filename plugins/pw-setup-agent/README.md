@@ -31,7 +31,7 @@ You never invoke a skill by name. Describe what you want and it loads.
 | Node 20.12+ (Playwright needs 20+; `.env` loading uses `process.loadEnvFile`) | `node --version` |
 | npm, or the package manager the repo already uses (pnpm, yarn, bun) | `npm --version` |
 | git (recommended: `.env` must be gitignored before it is written) | `git --version` |
-| Google Chrome, only for apps that sign in with Google | `CHROME_PATH` in `.env` if it isn't in the default place |
+| Google Chrome, only for apps that sign in with Google (playwright-cli opens it for the manual sign-in) | `playwright-cli open --browser chrome` |
 
 No MCP servers or connectors.
 
@@ -152,25 +152,28 @@ the login page and uses the Google templates (`--auth google-sso`). It finds
 the app's **who-am-I endpoint** (a request that returns 401 signed out and 200
 signed in) and confirms it with you.
 
-**Why real Chrome:** Google refuses sign-in in any browser Playwright launches
-("This browser or app may not be secure"), whatever the config. A normal
-Chrome that Playwright only connects to is accepted. So the tests never sign
-in themselves: they load a saved session, and only the setup step opens Chrome
-to create it.
+**How sign-in works:** the tests never sign in themselves; they load a saved
+session. When there is no valid one, the setup step runs `utils/login-cli.mjs`,
+which opens a headed Chrome through [playwright-cli](https://playwright.dev/agent-cli/introduction)
+on a persistent profile. You sign in by hand, including any verification
+Google asks for; once the who-am-I endpoint returns 200, the session is saved
+and the browser closes. Nothing tries to fill in Google's screens or get
+around its checks, and no Google credentials are stored.
 
 | Piece | What it does |
 | --- | --- |
 | `.auth/<role>.json` | The saved session the tests load. Gitignored |
-| `.auth/chrome-profile/<role>/` | A dedicated Chrome profile per role, used only to sign in. Gitignored |
-| `tests/auth/auth.setup.ts` | Runs before the tests (project `setup`). Reuses the JSON while it is under `AUTH_MAX_AGE_MINUTES` (60) old **and** who-am-I returns 200 with it; otherwise opens Chrome, tries the account from `.env`, and waits up to 4 minutes for you to finish by hand |
-| `pages/components/google-sign-in.component.ts` | Fills Google's screens when it can: email box or account chooser, password, 2-Step code, consent. Best effort: anything it can't do, you do in the window |
-| `utils/chrome-profile.ts` | Starts Chrome on the profile and connects over CDP |
-| `utils/login-chrome.mjs` | Manual fallback: saves the session from a Chrome you started yourself |
+| `.auth/cli-profile/<role>/` | A persistent browser profile per role, used only to sign in; it remembers the Google account. Gitignored |
+| `tests/auth/auth.setup.ts` | Runs before the tests (project `setup`). Reuses the JSON while it is under `AUTH_MAX_AGE_MINUTES` (60) old **and** who-am-I returns 200 with it; otherwise runs `login-cli.mjs` and waits for you (`LOGIN_TIMEOUT_MINUTES`, 10) |
+| `utils/login-cli.mjs` | Opens the sign-in page in playwright-cli's headed Chrome, polls who-am-I from the page, saves the session with `state-save`. Run it directly with the `login:cli` script |
+| `utils/auth.ts` | The who-am-I endpoint, login path, session paths and reuse helpers (keep `ME_ENDPOINT` and `LOGIN_PATH` in sync with `login-cli.mjs`) |
+| `pages/components/google-sign-in.component.ts` | The Google popup as the specs see it (the sign-in spec checks it opens) |
 
-**In `.env`** (all optional; without them you sign in by hand): `<ROLE>` is
-the account email (e.g. `ADMIN=you@company.com`), `<ROLE>_PASSWORD`,
-`OTP` (a fixed 2-Step code), `AUTH_MAX_AGE_MINUTES`, `FORCE_LOGIN`,
-`CHROME_PATH`, and `AUTH_BROWSER_CHANNEL` (e.g. `chrome` to run the tests in
+`@playwright/cli` is added as a dev dependency, so no global install is
+needed.
+
+**In `.env`** (all optional): `LOGIN_TIMEOUT_MINUTES`, `AUTH_MAX_AGE_MINUTES`,
+`FORCE_LOGIN`, and `AUTH_BROWSER_CHANNEL` (e.g. `chrome` to run the tests in
 installed Chrome). `BASE_URL` may contain `{ENVIRONMENT}`, filled from
 `ENVIRONMENT`.
 
@@ -178,21 +181,21 @@ installed Chrome). `BASE_URL` may contain `{ENVIRONMENT}`, filled from
 
 | Script (`pw:` prefix when merged) | Does |
 | --- | --- |
-| `login` | Runs only the setup step. The first time, a Chrome window opens: finish signing in there |
+| `login` | Runs only the setup step: reuses a valid session, or opens the browser for you to sign in |
 | `login:force` | Signs in again now, even with a valid session |
-| `login:chrome` | Manual fallback; see the top of `utils/login-chrome.mjs` |
+| `login:cli` | Runs `login-cli.mjs` directly (`login:cli -- viewer` for another role) |
 | `test` | Runs setup (instant when the session is valid), then the tests |
 
 The first run needs you at the screen. Later runs don't open a browser for
-setup. After an hour, or when the app rejects the session, Chrome reopens on
-the profile and refreshes it, usually without any typing because the profile
-remembers your Google account.
+setup. After an hour, or when the app rejects the session, the browser opens
+again on the same profile; because it remembers your Google account, signing
+in is usually a click.
 
 **On CI** there's no one to sign in. Either restore the session JSON from a
 secret into `.auth/<role>.json` before the tests run (it's reused while
 fresh; refresh the secret when it expires), or ask the app team for a
 test-login endpoint that skips Google. On CI the setup step fails with this
-advice instead of trying to open Chrome.
+advice instead of trying to open a browser.
 
 ## Scripts
 
@@ -299,10 +302,10 @@ failures.
 | Login spec fails | Expected until you fill in `.env` and adapt the labels in the login page object. |
 | Browser download fails behind a proxy | Set `HTTPS_PROXY` and re-run `npx playwright install chromium`. |
 | On Linux, browsers fail to start | Run `npx playwright install --with-deps chromium` (may need sudo). |
-| "Google blocked the sign-in: This browser or app may not be secure" | Something signed in inside a Playwright-launched browser. Sign-in belongs only in the setup step, which uses real Chrome. |
-| "The Chrome profile ... is already open" | Close the Chrome window that uses `.auth/chrome-profile/<role>/` and run again. |
-| "Google Chrome was not found" | Install Chrome, or set `CHROME_PATH` in `.env`. |
-| Setup waits, then fails "who-am-I endpoint did not return 200" | Sign-in wasn't finished within 4 minutes, or `--me-endpoint` is wrong. Check the endpoint returns 200 in the signed-in Chrome window, then run `login` again. |
+| "This browser or app may not be secure" | Google refused the browser. Sign in only in the window `login-cli.mjs` opens (headed Chrome on a persistent profile), never from a spec. |
+| "playwright-cli is not installed" | Run the project install (`@playwright/cli` is a dev dependency), or `npm install -g @playwright/cli`. |
+| "sign-in did not finish" | Nobody signed in within `LOGIN_TIMEOUT_MINUTES`, or `--me-endpoint` is wrong. Check the endpoint returns 200 in the signed-in window, then run `login` again. |
+| The browser window is still open from a failed run | `npx playwright-cli close-all`. |
 
 ## Upgrading from 0.1.0 or 0.2.0
 

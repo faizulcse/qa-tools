@@ -106,7 +106,7 @@ paths, so no other change is needed.
 
 ```ts
 projects: [
-  { name: 'setup', testMatch: /.*\.setup\.ts/, timeout: 5 * 60_000 },
+  { name: 'setup', testMatch: /.*\.setup\.ts/, timeout: (env.loginTimeoutMinutes + 2) * 60_000 },
   {
     name: 'chromium',
     use: { ...devices['Desktop Chrome'], channel: env.browserChannel || undefined, storageState: storageStatePath('admin') },
@@ -115,15 +115,16 @@ projects: [
 ],
 ```
 
-- `setup` runs `tests/auth/auth.setup.ts` once before the browser projects. It
-  gets 5 minutes because the first sign-in may wait for the user.
+- `setup` runs `tests/auth/auth.setup.ts` once before the browser projects.
+  Its timeout follows `LOGIN_TIMEOUT_MINUTES` (+2), because a sign-in waits
+  for the user in the window `utils/login-cli.mjs` opens.
 - Every browser project needs `dependencies: ['setup']` and a `storageState`.
   Add both when you add a browser. To run a project as another role, point
   its `storageState` at that role's file.
 - `channel` comes from `AUTH_BROWSER_CHANNEL` (e.g. `chrome`); empty uses
   bundled Chromium. It only changes the browser the **tests** run in. Sign-in
-  always happens in real Chrome over CDP, because Google blocks browsers
-  Playwright launches; no channel or flag changes that.
+  always happens by hand in the headed Chrome that `login-cli.mjs` opens
+  through playwright-cli; no channel or flag changes that.
 - Session reuse is set in `.env`: `AUTH_MAX_AGE_MINUTES` (default 60) and
   `FORCE_LOGIN=1`. Don't raise the age past what the app's own session
   allows.

@@ -1,16 +1,11 @@
-import { optionalEnv } from '@utils/env';
-import type { GoogleAccount } from './types';
-
 /**
- * Google accounts per role, read from env only. All values are optional:
- * whatever is missing, the user finishes by hand in the Chrome window the
- * setup step opens.
+ * Roles that sign in with Google. Each gets its own saved session
+ * (.auth/<role>.json) and browser profile (.auth/cli-profile/<role>/).
+ * Sign-in is by hand in the window utils/login-cli.mjs opens, so no
+ * credentials are stored anywhere.
  *
- * To add a role: add an entry here and its keys to .env.example. Each role
- * gets its own saved session (.auth/<role>.json) and Chrome profile.
+ * To add a role: add it here and to ROLES in utils/login-cli.mjs.
  */
-export const users = {
-{{ROLE_ENTRIES}}
-} satisfies Record<string, () => GoogleAccount>;
+export const roles = [{{ROLE_LIST}}] as const;
 
-export type Role = keyof typeof users;
+export type Role = (typeof roles)[number];

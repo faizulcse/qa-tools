@@ -16,6 +16,18 @@ whatever is already there**, amending it instead of refusing or asking.
   - An older sub-folder project in `tests/` (`tests/pw-setup.json`) blocks
     setup until it is moved to the root (README "Upgrading").
   - Projects set up before 0.3.0 keep `specs/`: older manifests default to it.
+- **Google sign-in through playwright-cli:** the setup step now runs
+  `utils/login-cli.mjs` when there is no valid session. It opens a headed
+  Chrome through playwright-cli on a persistent profile
+  (`.auth/cli-profile/<role>/`), waits for the user to sign in by hand
+  (`LOGIN_TIMEOUT_MINUTES`, default 10), polls who-am-I from the page and
+  saves the session with `state-save`. Replaces the Chrome-over-CDP flow:
+  `utils/chrome-profile.ts`, `utils/login-chrome.mjs`, the automatic filling
+  of Google's screens, the `login:chrome` script and the `<ROLE>`,
+  `<ROLE>_PASSWORD`, `OTP` and `CHROME_PATH` keys are removed; no Google
+  credentials are stored. New script `login:cli`; `@playwright/cli` 0.1.24 is
+  a dev dependency; the `setup` project's timeout follows the login timeout;
+  `.playwright-cli/` is gitignored. `test-data/users.ts` lists the roles.
 
 - **Removed:** the sub-folder mode and `scaffold.mjs --root`, `--split-configs`
   and `--reuse-env-keys`; the blockers for an existing Playwright setup,

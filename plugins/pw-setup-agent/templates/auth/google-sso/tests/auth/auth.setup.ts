@@ -1,39 +1,40 @@
-import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { test, expect, request } from '@playwright/test';
-import { GoogleSignInComponent } from '@pages/components/google-sign-in.component';
-import { users, type Role } from '@data/users';
-import { env } from '@utils/env';
-import { openChromeProfile } from '@utils/chrome-profile';
-import { LOGIN_PATH, chromeProfilePath, forceLogin, meStatus, sessionAgeMinutes, storageStatePath } from '@utils/auth';
+import { roles } from '@data/users';
+import { env, projectDir } from '@utils/env';
+import { forceLogin, meStatus, sessionAgeMinutes, storageStatePath } from '@utils/auth';
 
 /**
- * Signs in once per role and saves the session to .auth/<role>.json, which
+ * Makes sure every role has a valid saved session, .auth/<role>.json, which
  * the test projects load.
  *
  * - Reuses the file while it is younger than AUTH_MAX_AGE_MINUTES and the
  *   who-am-I endpoint returns 200 with it (no browser opens).
- * - Otherwise opens real Chrome on .auth/chrome-profile/<role>/ (Google blocks
- *   Playwright-launched browsers), tries to sign in from env, and waits up to
- *   4 minutes for the user to finish by hand.
+ * - Otherwise runs utils/login-cli.mjs: a headed Chrome opens through
+ *   playwright-cli on a persistent profile, you sign in by hand, and the
+ *   session is saved when who-am-I returns 200 (LOGIN_TIMEOUT_MINUTES).
  * - FORCE_LOGIN=1 or `login:force` skips the reuse check.
  *
- * Self-contained on purpose: it does not use LoginPage, so it keeps working
- * when the app has page objects of its own.
+ * Self-contained on purpose: it does not use the page objects, so it keeps
+ * working when the app has page objects of its own.
  */
-for (const role of Object.keys(users) as Role[]) {
+for (const role of roles) {
   test(`sign in as ${role}`, async () => {
     const file = storageStatePath(role);
+    const status = async () => {
+      const api = await request.newContext({ storageState: file });
+      try {
+        return await meStatus(api);
+      } finally {
+        await api.dispose();
+      }
+    };
 
     const age = sessionAgeMinutes(file);
-    if (age !== null && age < env.authMaxAgeMinutes && !forceLogin()) {
-      const api = await request.newContext({ storageState: file });
-      const status = await meStatus(api);
-      await api.dispose();
-      if (status === 200) {
-        console.log(`[auth] ${role}: reusing ${path.basename(file)} (${Math.round(age)} min old)`);
-        return;
-      }
+    if (age !== null && age < env.authMaxAgeMinutes && !forceLogin() && (await status()) === 200) {
+      console.log(`[auth] ${role}: reusing ${path.basename(file)} (${Math.round(age)} min old)`);
+      return;
     }
 
     if (env.isCI) {
@@ -43,43 +44,19 @@ for (const role of Object.keys(users) as Role[]) {
       );
     }
 
-    console.log(`[auth] ${role}: opening Chrome to sign in (finish by hand if asked, up to 4 min)`);
-    const chrome = await openChromeProfile(new URL(LOGIN_PATH, env.baseUrl).toString(), chromeProfilePath(role));
+    // Interactive: a browser window opens and waits for you to sign in.
     try {
-      const { page, context } = chrome;
-
-      if ((await meStatus(page.request)) !== 200) {
-        try {
-          const googleButton = page.getByRole('button', { name: /sign in with google/i });
-          await googleButton.waitFor({ timeout: 30_000 });
-          const popup = page.waitForEvent('popup');
-          await googleButton.click();
-          const google = new GoogleSignInComponent(await popup);
-          const account = users[role]();
-          if (!account.email) throw new Error('no account email in .env');
-          await google.signIn(account);
-        } catch (err) {
-          console.log(`[auth] ${role}: automatic sign-in stopped (${(err as Error).message.split('\n')[0]}).`);
-          console.log(`[auth] ${role}: finish signing in by hand in the Chrome window.`);
-        }
-      }
-
-      await expect
-        .poll(() => meStatus(page.request), {
-          message: `${role} is not signed in: the who-am-I endpoint did not return 200`,
-          timeout: 4 * 60_000,
-          intervals: [2_000],
-        })
-        .toBe(200);
-
-      // Write to a temp file and rename, so an interrupted run never leaves half a JSON.
-      fs.mkdirSync(path.dirname(file), { recursive: true });
-      const tmp = `${file}.tmp`;
-      await context.storageState({ path: tmp });
-      fs.renameSync(tmp, file);
-      console.log(`[auth] ${role}: saved ${path.basename(file)}`);
-    } finally {
-      await chrome.close();
+      execFileSync(process.execPath, [path.join(projectDir, 'utils', 'login-cli.mjs'), role], {
+        cwd: projectDir,
+        stdio: 'inherit',
+      });
+    } catch {
+      throw new Error(
+        `[auth] ${role}: sign-in did not finish (see the [login-cli] lines above). ` +
+          'Run the login script again, or raise LOGIN_TIMEOUT_MINUTES in .env.',
+      );
     }
+
+    expect(await status(), `${role} is not signed in: the who-am-I endpoint did not return 200`).toBe(200);
   });
 }

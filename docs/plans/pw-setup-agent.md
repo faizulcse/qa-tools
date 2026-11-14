@@ -8,7 +8,9 @@ needs a run against real Google; it includes the auth setup step and session
 reuse below. Session reuse for the username/password template is still Phase 2.
 Next: **0.3.0, always the root and amend what exists** is built and tested
 against seven scenario repos (not released yet). The spec folder is `tests/`
-(was `specs/`); see "Specs folder: tests/" below. Differences from the plan
+(was `specs/`); see "Specs folder: tests/" below. Google sign-in now goes
+through playwright-cli (`utils/login-cli.mjs`); see "Sign-in through
+playwright-cli (0.3.0)" in the Google SSO section. Differences from the plan
 found while building: apps targeting older than ES2017 also get the
 `tsconfig.e2e.json` exception; `pw-setup.json` also records `preexisting`
 files so pw-check softens findings in them; the Google setup step no longer
@@ -163,24 +165,35 @@ Projects set up before this change keep `specs/`: manifests without
 ### Testing the change
 
 Scratch repos, each scaffolded, amended by following the skill's `>`
-steps, then `typecheck`, `lint`, `check` and `--list`, plus a diff showing
-the app's files only gained lines:
+steps, then `typecheck`, `lint` (0 warnings), `check` and `--list`, plus a
+check that the app's files only gained lines. Result column: what the run
+showed (2026-11-14/15).
 
-1. Empty repo → standalone, same output as 0.2.0.
-2. Node/TS app with its own `tsconfig.json` (with comments, `baseUrl:
-   "./src"`, `include: ["src"]`), flat ESLint config and `BASE_URL` in
-   `.env.example` → amended in place, comments kept, aliases relative to
-   `baseUrl`, `BASE_URL` reused.
-3. Existing Playwright project (`testDir: './e2e'`, hard-coded `baseURL`,
-   its own `pages/` with a `login.page.ts`) → specs in `e2e/`, the app's
-   `login.page.ts` kept, `baseURL` moved to env with the same value, the
-   existing tests still listed.
-4. Next.js app → page objects in `page-objects/`, `next build` unaffected.
-5. Legacy `.eslintrc.json` app → `overrides` entry added, lint passes.
-6. App with `moduleResolution: nodenext` → the `tsconfig.e2e.json`
-   exception.
-7. Google sign-in on top of case 3 → `setup` project and `storageState`
-   added to the existing projects.
+| # | Scenario | Expected | Result |
+|---|---|---|---|
+| 1 | Empty repo | Standalone; specs in `tests/`; all four pass | Pass: check 21 passed, 3 tests listed |
+| 2 | Node/TS app, own `tsconfig.json` (comments, `baseUrl: "./src"`, `include: ["src"]`, `target` ES2022), flat ESLint config, `BASE_URL` in `.env.example` | tsconfig amended in place, comments kept, aliases relative to `baseUrl`, `BASE_URL` reused, app build still passes | Pass. The app build now also emits the test folders into `dist/` (the documented trade-off) |
+| 2b | Same app without `target` (old default target) | `tsconfig.e2e.json` exception, app tsconfig untouched | Pass after two fixes: templates no longer use ES2021 APIs; pw-check follows `extends` for `baseUrl` |
+| 3 | Existing Playwright project (`testDir: './e2e'`, hard-coded `baseURL`, its own `pages/login.page.ts`, an `e2e/example.spec.ts`) | Specs in `e2e/`, the app's `login.page.ts` kept, `baseURL` moved to env with the same value, existing test still listed | Pass. Example login spec dropped (the app's `LoginPage` has another API); pw-check warns, not fails, on the app's own files |
+| 4 | Next.js app | Page objects in `page-objects/`, `next build` unaffected | Pass: `next build` lists only `/` and `/404` |
+| 5 | Legacy `.eslintrc.json` (ESLint 8) | `overrides` entry added, lint passes | Pass |
+| 6 | `moduleResolution: nodenext` | `tsconfig.e2e.json` exception | Pass; app `tsc` still passes |
+| 7 | Google sign-in on top of case 3 | `setup` project and `storageState` added to the existing projects; setup compiles next to the app's `LoginPage` | Pass after a fix: the setup step no longer uses `LoginPage` |
+| 8 | Jest with a unit test already in `tests/` (`tests/add.test.ts`) | Playwright `testMatch: '**/*.spec.ts'`; `AMEND` for the `jest` key in `package.json` | Pass: `jest` runs only `add.test.ts`, Playwright lists only the 3 specs |
+| 9 | Vitest with `vitest.config.ts` | `AMEND` adding `tests/**/*.spec.ts` to `test.exclude` | Pass (dry run; the exclude was not applied and run) |
+| 10 | Older sub-folder project in `tests/` (`tests/pw-setup.json`) | Blocked with the move-to-root advice, in `detect_env` and `scaffold` | Pass |
+| 11 | Re-run; `--force` re-run; run from a sub-folder; `--root` | "already set up"; only pw-setup's files refreshed and only missing config items listed; "run from the repository root"; "--root was removed" | Pass after fixing a crash and a false `testMatch` item on re-runs |
+| 12 | Google sign-in, fresh project, mock app, sign-in through `login-cli.mjs` (a second playwright-cli command acts as the person) | First run opens the browser and saves the session; second run reuses it with no browser; tests pass | Pass: 14 s, then 0.5 s; 5 tests pass |
+| 13 | Google sign-in edge cases | `login:force` signs in again; nobody signs in → clear error; CI → advice; unknown role rejected | Pass after adding the clear "sign-in did not finish" error |
+| 14 | Google sign-in merged into an app, `E2E_` prefix, roles `admin,viewer` | `login-cli.mjs` reads `E2E_` keys and both roles; all four pass | Pass: 7 tests listed |
+
+**Not covered yet:**
+- **Real Google:** every sign-in run used the mock app; the real
+  account-chooser and verification screens still need a run on a real
+  project.
+- **A real pnpm install:** pnpm was broken on the test machine (corepack), so
+  only the lockfile detection and printed commands were checked.
+- **Applying the Vitest exclude:** case 9 checked the dry run only.
 
 ### Release
 
@@ -465,6 +478,11 @@ username/password template gets the same setup step in Phase 2.
 
 ## Google SSO login (`--auth google-sso`, 0.2.0)
 
+> 0.3.0 replaces how the setup step signs in: see "Sign-in through
+> playwright-cli (0.3.0)" at the end of this section. The Chrome-over-CDP
+> architecture below (`chrome-profile.ts`, automatic filling of Google's
+> screens, `login-chrome.mjs`) is kept as the 0.2.0 record.
+
 For apps whose only login is "Sign in with Google" (Google Identity Services
 popup). The design was verified end to end on a real project; the plugin
 version was then
@@ -601,6 +619,54 @@ tested against a local mock app with fake Google screens.
 - Blocked by Google: the clear error, not a strict-mode or timeout error.
   Done (mock blocked screen).
 - Account chooser and email box both handled. Done (mock screens).
+
+### Sign-in through playwright-cli (0.3.0)
+
+The setup step signs in through **playwright-cli** instead of a Chrome process
+Playwright connects to over CDP, and sign-in is **by hand**. This matches the
+reference project's `utils/login-cli.mjs` and `utils/auth.ts`, made generic
+(the endpoint, login path, roles and env prefix are template placeholders).
+
+- **`utils/login-cli.mjs [role]`** (`login:cli` script):
+  1. Loads `.env`, resolves `BASE_URL` (with `{ENVIRONMENT}`), checks the role
+     against `ROLES`.
+  2. Uses the project's own `playwright-cli` (`node_modules/.bin`, the
+     `@playwright/cli` dev dependency, pinned to 0.1.24), else a global one.
+  3. `playwright-cli -s=auth-<role> open <base URL + LOGIN_PATH> --browser
+     chrome --headed --persistent --profile .auth/cli-profile/<role>`.
+  4. Polls who-am-I from the open page every 3 s
+     (`playwright-cli --raw eval "fetch(ME_ENDPOINT, { credentials: 'include' })"`)
+     until it is 200, or `LOGIN_TIMEOUT_MINUTES` (default 10) passes. The user
+     signs in by hand meanwhile, including any verification Google asks for.
+  5. `playwright-cli state-save` to a temp file, renamed to
+     `.auth/<role>.json`; `close` in `finally`.
+- **`tests/auth/auth.setup.ts`**, per role: reuse `.auth/<role>.json` when
+  it is under `AUTH_MAX_AGE_MINUTES` old and who-am-I returns 200 with it
+  (unless `FORCE_LOGIN`/`login:force`); on CI, fail with the advice; otherwise
+  run `login-cli.mjs <role>` (stdio inherited, so its messages show), then
+  `expect` who-am-I to be 200 with the saved file. If the script fails, the
+  error says sign-in did not finish and points at `LOGIN_TIMEOUT_MINUTES`.
+  The setup project's timeout is `(LOGIN_TIMEOUT_MINUTES + 2)` minutes.
+- **`utils/auth.ts`**: as before (who-am-I, login path, session paths, reuse
+  helpers), with `cliProfilePath(role)` instead of `chromeProfilePath`.
+  `ME_ENDPOINT` and `LOGIN_PATH` are also in `login-cli.mjs`; both files say
+  to keep them in sync.
+- **Removed:** `utils/chrome-profile.ts`, `utils/login-chrome.mjs` and the
+  `login:chrome` script; the automatic filling of Google's screens
+  (`GoogleSignInComponent.signIn`; the component now only exposes the popup
+  for the sign-in spec); the `<ROLE>`, `<ROLE>_PASSWORD`, `OTP` and
+  `CHROME_PATH` keys. No Google credentials are stored anywhere.
+  `test-data/users.ts` is just the list of roles.
+- **Added:** `LOGIN_TIMEOUT_MINUTES` in `.env.example` and `env.ts`; the
+  `login:cli` script; `/.playwright-cli/` in `.gitignore` (playwright-cli's
+  working files). `login` and `login:force` run the setup project (no
+  `--headed`; login-cli opens its own headed window).
+- **Tested** against the mock app with a simulated person signing in from a
+  second playwright-cli command: first run saves the session (14 s), the
+  second reuses it (0.5 s), `login:force` signs in again on the persistent
+  profile, a timeout gives the clear error, CI fails with the advice, and the
+  merged `E2E_` two-role case type-checks and lints. Real Google still needs a
+  run on a real project.
 
 ## The check (`pw-check` / `check_setup.mjs`)
 

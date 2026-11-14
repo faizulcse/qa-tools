@@ -17,7 +17,8 @@
  *                         keys the app already has (BASE_URL, ...) are reused.
  *   --auth MODE           password (default): username/password login page
  *                         google-sso: "Sign in with Google" only; adds an auth setup step that
- *                         signs in through real Chrome and saves .auth/<role>.json
+ *                         reuses .auth/<role>.json or runs utils/login-cli.mjs (playwright-cli,
+ *                         headed Chrome, sign in by hand) to create it
  *   --me-endpoint PATH    google-sso: the app's "who am I" endpoint (200 signed in, 401 not)
  *   --login-path PATH     google-sso: where the "Sign in with Google" button is (default: /)
  *   --force               overwrite files pw-setup created earlier (never the app's, never .env)
@@ -85,9 +86,11 @@ const SCRIPT_NAMES = {
   // google-sso only
   login: ['login', 'pw:login'],
   loginForce: ['login:force', 'pw:login:force'],
-  loginChrome: ['login:chrome', 'pw:login:chrome'],
+  loginCli: ['login:cli', 'pw:login:cli'],
 };
-const SSO_SCRIPTS = ['login', 'loginForce', 'loginChrome'];
+const SSO_SCRIPTS = ['login', 'loginForce', 'loginCli'];
+/** google-sso: manual sign-in runs through playwright-cli (utils/login-cli.mjs). */
+const PLAYWRIGHT_CLI = { name: '@playwright/cli', version: '0.1.24' };
 
 /** Playwright projects: device, and whether a Chrome channel applies. */
 const BROWSERS = {
@@ -500,7 +503,7 @@ function projectEntries(opts, ctx) {
   }
   const role = opts.roles[0];
   const setup = `    // Signs in once per role and saves .auth/<role>.json (${ctx.specsDir}/auth/auth.setup.ts).\n` +
-    "    { name: 'setup', testMatch: /.*\\.setup\\.ts/, timeout: 5 * 60_000 },";
+    "    { name: 'setup', testMatch: /.*\\.setup\\.ts/, timeout: (env.loginTimeoutMinutes + 2) * 60_000 },";
   const browsers = opts.browsers.map((b) => {
     const channel = BROWSERS[b].chrome ? ' channel: env.browserChannel || undefined,' : '';
     return `    {\n      name: '${b}',\n      use: { ...devices['${BROWSERS[b].device}'],${channel} storageState: storageStatePath('${role}') },\n      dependencies: ['setup'],\n    },`;
@@ -529,12 +532,13 @@ function placeholders(opts, ctx) {
     AUTH_IMPORT: sso ? "import { storageStatePath } from './utils/auth';\n" : '',
     ENV_EXTRA: sso
       ? `  authMaxAgeMinutes: Number(optionalEnv('${p}AUTH_MAX_AGE_MINUTES', '60')) || 60,\n` +
-        `  browserChannel: optionalEnv('${p}AUTH_BROWSER_CHANNEL'),\n`
+        `  browserChannel: optionalEnv('${p}AUTH_BROWSER_CHANNEL'),\n` +
+        `  loginTimeoutMinutes: Number(optionalEnv('${p}LOGIN_TIMEOUT_MINUTES', '10')) || 10,\n`
       : '',
     ME_ENDPOINT: opts.meEndpoint,
     LOGIN_PATH: opts.loginPath,
     ROLE_LIST: opts.roles.map((r) => `'${r}'`).join(', '),
-    LOGIN_CHROME_CMD: sso ? ctx.cmd('loginChrome') : '',
+    LOGIN_CLI_CMD: sso ? ctx.cmd('loginCli') : '',
     ROLE_ENV: opts.roles.map((r) => envKeysFor(r).map((k) => `${k}=`).join('\n')).join('\n'),
     ROLE_ENTRIES: opts.roles
       .map((r) => {
@@ -574,9 +578,9 @@ function scriptsFor(ctx) {
     [n('check')]: 'node utils/check-setup.mjs',
     [n('envInit')]: 'node utils/init-env.mjs',
     ...(ctx.sso && {
-      [n('login')]: 'playwright test --project=setup --headed',
-      [n('loginForce')]: 'playwright test --project=setup --headed',
-      [n('loginChrome')]: 'node utils/login-chrome.mjs',
+      [n('login')]: 'playwright test --project=setup',
+      [n('loginForce')]: 'playwright test --project=setup',
+      [n('loginCli')]: 'node utils/login-cli.mjs',
     }),
   };
 }
@@ -808,7 +812,7 @@ function playwrightAmendments(opts, insp, ctx) {
   else if (ctx.specOnly) items.push(`testMatch: '**/*.spec.ts' (${ctx.specsDir}/ also holds unit tests; Playwright must not run them)`);
   if (ctx.sso) {
     if (!pw.importsAuth) items.push("import { storageStatePath } from './utils/auth';");
-    if (!pw.hasSetupProject) items.push("projects: add { name: 'setup', testMatch: /.*\\.setup\\.ts/, timeout: 5 * 60_000 } first");
+    if (!pw.hasSetupProject) items.push("projects: add { name: 'setup', testMatch: /.*\\.setup\\.ts/, timeout: (env.loginTimeoutMinutes + 2) * 60_000 } first");
     if (!pw.hasStorageState) {
       const browsers = (pw.projects ?? []).filter((n) => n !== 'setup');
       items.push(`projects: on each browser project (${browsers.join(', ') || 'none found'}) add dependencies: ['setup'] and use.storageState: storageStatePath('${opts.roles[0]}')`);
@@ -893,6 +897,7 @@ function plan(opts, root) {
     if (rel === 'package.json') {
       const pkg = JSON.parse(content);
       pkg.scripts = scriptsFor(ctx);
+      if (sso) pkg.devDependencies[PLAYWRIGHT_CLI.name] = PLAYWRIGHT_CLI.version;
       content = `${JSON.stringify(pkg, null, 2)}\n`;
     }
     rendered.push({ path: rel, content, template: src });
