@@ -1,6 +1,20 @@
 # pw-setup-agent: Plan
 
-Status: planned, not built. Target release: pw-setup-agent 0.1.0, qa-tools marketplace 0.4.0.
+Status: Phase 1 released as pw-setup-agent 0.1.0 in qa-tools marketplace 0.4.0.
+
+### Phase 1 notes (changes from the original plan)
+
+- Templates live in `templates/project/` (copied into `tests/`); the GitHub
+  workflow will go in `templates/github/`. Dotfiles are stored without the dot
+  (`gitignore`, `env.example`, `nvmrc`) so they don't affect this repo.
+- Added `pages/home.page.ts` and `specs/home/home.spec.ts` (`@smoke`) so the
+  header component has a page to live on and the smoke run has a target.
+- `pw-check` skill and a minimal `test-data/` (`types.ts`, `users.ts`, credentials
+  from env) moved into Phase 1. Faker and builders are still Phase 2.
+- `typescript` is pinned to 6.0.3: `typescript-eslint` 8.x supports `<6.1`.
+- `.env` is loaded with Node's `process.loadEnvFile` (no dotenv); `.nvmrc` is `lts/*`.
+- Check rules for the setup project, faker usage and the CI workflow arrive
+  with the phases that add those files.
 
 ## Purpose
 

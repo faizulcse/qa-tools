@@ -1,0 +1,24 @@
+{
+  "name": "{{PROJECT_NAME}}-tests",
+  "private": true,
+  "description": "Playwright end-to-end tests",
+  "scripts": {
+    "test": "playwright test",
+    "test:smoke": "playwright test --grep @smoke",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "report": "playwright show-report",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "check": "node utils/check-setup.mjs --root .",
+    "env:init": "node utils/init-env.mjs --root ."
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.1",
+    "@types/node": "26.6.6",
+    "eslint": "10.15.0",
+    "eslint-plugin-playwright": "2.12.2",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.2"
+  }
+}

@@ -1,12 +1,15 @@
 # qa-tools
 
-A Claude Code / Cowork plugin marketplace with two plugins:
+A Claude Code / Cowork plugin marketplace with three plugins:
 
 - **qa-agent**: an agentic QA assistant for manual testing. It turns tickets
   into test plans, runs them in a browser or against an API, files bugs, and
   writes reports.
 - **git-agent**: drafts a commit message (title + description) from your
   current changes, in the repo's existing style.
+- **pw-setup-agent**: sets up a Playwright + TypeScript test project in
+  `tests/` with page objects, fixtures and typed test data, and checks that it
+  follows the conventions.
 
 You don't need MCP servers or connectors. Everything runs on small bundled
 scripts.
@@ -20,6 +23,7 @@ scripts.
 | [Claude Code](https://claude.com/claude-code) | everything | `claude --version` |
 | Python 3.8+ | both plugins (standard library only, no `pip install`) | `python3 --version` |
 | git | git-agent | `git --version` |
+| Node 20.12+ | pw-setup-agent | `node --version` |
 | Node 18+ | browser testing only (optional) | `node --version` |
 
 ### Step 2: Install the plugins
@@ -30,6 +34,7 @@ Inside a Claude Code session:
 /plugin marketplace add faizulcse/qa-tools
 /plugin install qa-agent@qa-tools
 /plugin install git-agent@qa-tools
+/plugin install pw-setup-agent@qa-tools
 ```
 
 Or from a terminal:
@@ -38,9 +43,10 @@ Or from a terminal:
 claude plugin marketplace add faizulcse/qa-tools
 claude plugin install qa-agent@qa-tools
 claude plugin install git-agent@qa-tools
+claude plugin install pw-setup-agent@qa-tools
 ```
 
-Install only the plugin you need if you don't want both. Restart Claude Code
+Install only the plugins you need. Restart Claude Code
 after installing so the skills load.
 
 **That's all you need for** requirements analysis, API testing, bug reports,
@@ -146,6 +152,20 @@ explicitly say so. Run it from inside a git repository.
 
 Full documentation: [`plugins/git-agent/README.md`](plugins/git-agent/README.md).
 
+## What pw-setup-agent does
+
+| Skill | Say | Produces |
+| --- | --- | --- |
+| `pw-setup` | "set up Playwright with TypeScript" | A `tests/` project with config, page objects, fixtures, typed test data, `.env` and lint rules |
+| `pw-check` | "check my Playwright setup" | A structure and conventions report (also `npm run check` in the project) |
+| `pw-page-objects` | "add a page object for the settings page" | Page objects and fixtures that follow the project conventions |
+| `pw-locators` | "which locator should I use" | Role- and label-based locators instead of CSS or XPath |
+| `pw-core-config` | "add Firefox", "change the base URL" | Changes to `playwright.config.ts` and `.env` |
+
+It writes spec files. To drive a browser by hand without writing code, use
+qa-agent's `qa-test-ui`. The plan is in
+[`docs/plans/pw-setup-agent.md`](docs/plans/pw-setup-agent.md).
+
 ## Updating
 
 Updates install automatically by default. To update now:
@@ -154,6 +174,7 @@ Updates install automatically by default. To update now:
 /plugin marketplace update
 /plugin update qa-agent@qa-tools
 /plugin update git-agent@qa-tools
+/plugin update pw-setup-agent@qa-tools
 ```
 
 ## Troubleshooting
@@ -176,16 +197,17 @@ Updates install automatically by default. To update now:
    only update when the marketplace entry's version changes.
 3. Commit and push.
 
-Tag releases if you want people to pin one: `/plugin marketplace add owner/repo@v0.3.0`.
+Tag releases if you want people to pin one: `/plugin marketplace add owner/repo@v0.4.0`.
 
 ## Versions
 
-Marketplace (`qa-tools`): **0.3.0**
+Marketplace (`qa-tools`): **0.4.0**
 
 | Plugin | Version | Changelog |
 | --- | --- | --- |
 | qa-agent | 0.5.0 | [`plugins/qa-agent/CHANGELOG.md`](plugins/qa-agent/CHANGELOG.md) |
 | git-agent | 0.1.0 | [`plugins/git-agent/CHANGELOG.md`](plugins/git-agent/CHANGELOG.md) |
+| pw-setup-agent | 0.1.0 | [`plugins/pw-setup-agent/CHANGELOG.md`](plugins/pw-setup-agent/CHANGELOG.md) |
 
 ## License
 

@@ -1,0 +1,17 @@
+{
+  "name": "pw-setup-agent",
+  "version": "0.1.0",
+  "description": "Sets up and maintains a Playwright + TypeScript test project in tests/ using page objects, fixtures and typed test data, and checks that the project follows the conventions and works. No MCP servers required.",
+  "author": {
+    "name": "MD. FAIZUL ISLAM"
+  },
+  "keywords": [
+    "playwright",
+    "typescript",
+    "e2e",
+    "page-object-model",
+    "test-automation",
+    "scaffold"
+  ],
+  "license": "MIT"
+}
