@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **`qa-setup.sh` creates `.env`** too, matching `qa-setup.mjs`: it copies
+  `.env.example` to `.env` on the first run and leaves an existing `.env`
+  unchanged. The READMEs no longer tell you to copy it by hand.
+
 ## 0.6.0
 
 - **Jira comment template revised.** Template A reports earlier QA feedback as

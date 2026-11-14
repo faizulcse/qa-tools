@@ -87,6 +87,14 @@ JIRA_API_TOKEN=
 ENV
 fi
 
+# Create .env from the template on first run; never overwrite filled-in values.
+if [ ! -f .env ]; then
+  cp .env.example .env
+  echo "Created $(pwd)/.env from .env.example - fill in the URL and accounts."
+else
+  echo ".env already exists - leaving it unchanged."
+fi
+
 if [ ! -f .gitignore ]; then
   printf 'node_modules/\nqa-results/\n.env\n' > .gitignore
 fi
@@ -96,7 +104,7 @@ cat <<EOF
 Workspace ready: $(pwd)
   tests/       spec files for cases promoted to automation
   qa-results/  screenshots, logs, result.json per case
-  .env.example copy to .env and fill in the environment URL and accounts
+  .env         fill in the environment URL and accounts (template: .env.example)
 
 Check the CLI:      $CLI --help
 Drive a page:       $CLI -s=qa open https://example.com

@@ -82,20 +82,19 @@ Requires Node 18+.
 macOS / Linux:
 
 ```bash
-bash "$CLAUDE_PLUGIN_ROOT/scripts/qa-setup.sh" ./qa-workspace
-cp qa-workspace/.env.example qa-workspace/.env   # then fill it in
+bash "$CLAUDE_PLUGIN_ROOT/scripts/qa-setup.sh" ./qa-workspace   # then fill in qa-workspace/.env
 ```
 
 Windows (or anywhere without bash) — same result, no shell required:
 
 ```powershell
 node "%CLAUDE_PLUGIN_ROOT%\scripts\qa-setup.mjs" .\qa-workspace
-copy qa-workspace\.env.example qa-workspace\.env
 ```
 
 Either script installs `@playwright/cli`, runs `playwright-cli install --skills`
 to place the official Playwright skill files, adds the Playwright test runner for
-cases promoted to specs, and downloads Chromium. Or do it yourself:
+cases promoted to specs, and downloads Chromium. Both also create `.env` from `.env.example` on the first
+run and leave an existing `.env` alone. Or do it yourself:
 
 ```bash
 npm install -g @playwright/cli@latest

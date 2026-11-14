@@ -66,7 +66,7 @@ Claude runs the plugin's setup script (option B) for you.
 
 **B. Run the setup script yourself.** It creates the `qa-workspace` folder,
 installs playwright-cli and its skill files, downloads Chromium, and writes a
-`.env.example` and a `.gitignore`. It's safe to re-run.
+`.env.example`, a `.env` created from it, and a `.gitignore`. It's safe to re-run.
 
 ```bash
 # macOS / Linux
@@ -87,7 +87,8 @@ playwright-cli install-browser chromium
 ### Step 4 (optional): Connect Jira
 
 Create a `.env` file in the folder you run Claude from. If you ran the setup
-script, copy `qa-workspace/.env.example` to `.env` and fill it in.
+script, it already created `qa-workspace/.env`: fill that in, or copy it to the
+folder you run Claude from.
 
 ```bash
 # Jira Cloud
