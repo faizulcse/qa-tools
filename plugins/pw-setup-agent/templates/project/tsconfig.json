@@ -17,6 +17,13 @@
       "@utils/*": ["./utils/*"]
     }
   },
-  "include": ["**/*.ts"],
+  "include": [
+    "playwright.config.ts",
+    "specs/**/*.ts",
+    "pages/**/*.ts",
+    "fixtures/**/*.ts",
+    "test-data/**/*.ts",
+    "utils/**/*.ts"
+  ],
   "exclude": ["node_modules", "test-results", "playwright-report", "blob-report"]
 }

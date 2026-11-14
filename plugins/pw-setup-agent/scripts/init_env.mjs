@@ -2,14 +2,17 @@
 /**
  * init_env.mjs - create or update the local .env from .env.example.
  *
- *   node init_env.mjs --root tests                    create .env if missing
- *   node init_env.mjs --root tests --base-url <url>   ...and set BASE_URL
- *   node init_env.mjs --root tests --sync             add keys missing from .env
- *   node init_env.mjs --root tests --force            recreate (old file -> .env.bak)
+ *   node init_env.mjs                          create .env if missing (--root defaults to .)
+ *   node init_env.mjs --base-url <url>         ...and set BASE_URL
+ *   node init_env.mjs --sync                   add keys missing from .env
+ *   node init_env.mjs --force                  recreate (old file -> .env.bak)
+ *   node init_env.mjs --root tests ...         for a project in a sub-folder
  *   add --json for machine-readable output
  *
- * Copied into projects as tests/utils/init-env.mjs and run with
- * `npm run env:init`. Node 18+, no dependencies.
+ * Copied into projects as utils/init-env.mjs and run with `npm run env:init`
+ * (`pw:env:init` when merged into an app's package.json). If the project's
+ * pw-setup.json sets an env prefix (e.g. E2E_), --base-url sets E2E_BASE_URL.
+ * Node 18+, no dependencies.
  *
  * Rules:
  * - Never overwrites an existing .env unless --force (which backs it up).
@@ -113,8 +116,14 @@ function main() {
   }
 
   const example = parseEnv(readFileSync(examplePath, 'utf8'));
+  let prefix = '';
+  try {
+    prefix = JSON.parse(readFileSync(join(root, 'pw-setup.json'), 'utf8')).env?.prefix ?? '';
+  } catch {
+    /* no manifest: unprefixed keys */
+  }
   const overrides = {};
-  if (opts.baseUrl) overrides.BASE_URL = opts.baseUrl;
+  if (opts.baseUrl) overrides[`${prefix}BASE_URL`] = opts.baseUrl;
 
   if (!existsSync(envPath) || opts.force) {
     if (existsSync(envPath)) {

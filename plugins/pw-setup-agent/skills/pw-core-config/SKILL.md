@@ -14,12 +14,21 @@ metadata:
 
 # Playwright Core Configuration
 
-The project's runtime settings live in two files: `tests/playwright.config.ts`
-and `tests/tsconfig.json`. Environment values come from `tests/utils/env.ts`,
-the one place that reads `process.env`.
+The project's runtime settings live in two files: `playwright.config.ts` and
+`tsconfig.json`, in the project folder (the repository root by default, or the
+folder in `pw-setup.json`'s `root`, such as `tests/`). Environment values come
+from `utils/env.ts`, the one place that reads `process.env`.
+
+When the project was merged into an app that has its own configs, the test
+ones are `tsconfig.e2e.json` and `eslint.e2e.config.mjs`, and
+`playwright.config.ts` has `tsconfig: './tsconfig.e2e.json'` so Playwright
+resolves the path aliases. Edit those, never the app's `tsconfig.json`.
+`pw-setup.json` lists the file names under `configs`. Env keys may carry a
+prefix (`E2E_BASE_URL`), listed under `env.prefix`.
 
 Before changing anything, read the current `playwright.config.ts`. After
-changing it, run `npx playwright test --list` and `npm run check`.
+changing it, run `npx playwright test --list` and the `check` script
+(`pw:check` in merged mode).
 
 ## The settings and why
 
@@ -59,17 +68,19 @@ with `--project=webkit`.
 
 **A new environment variable.** Read it in `utils/env.ts` with `requireEnv`
 (must be set) or `optionalEnv` (has a default), add the key to `.env.example`,
-and run `npm run env:init -- --sync` to add it to your `.env`. pw-check fails
+and run the `env:init` script with `--sync` (`npm run env:init -- --sync`, or
+`pw:env:init` in merged mode) to add it to your `.env`. Use the project's env
+prefix, if it has one. pw-check fails
 if the code reads a variable that `.env.example` does not list.
 
 **A slow test.** Use `test.slow()` or `test.setTimeout(60_000)` in that test.
 Do not raise the global timeout for one test.
 
-**A new path alias.** Add it to `compilerOptions.paths` in `tsconfig.json`
-(`"@api/*": ["./api/*"]`). Playwright reads tsconfig paths, so no other change
+**A new path alias.** Add it to `compilerOptions.paths` in `tsconfig.json`, or
+`tsconfig.e2e.json` with split configs: `"@api/*": ["./api/*"]`. Playwright reads tsconfig paths, so no other change
 is needed.
 
-## tsconfig.json
+## tsconfig.json (or tsconfig.e2e.json)
 
 - `strict: true` is required by pw-check.
 - `types: ["node"]` is needed because TypeScript 6 no longer includes all

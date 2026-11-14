@@ -86,12 +86,13 @@ creates one with `new`.
   `toHaveText()`, `toHaveURL()`. Never `expect(await locator.isVisible()).toBe(true)`.
 - Tests are independent: no order dependencies, no shared state between tests.
   Use `test.beforeEach` for shared navigation.
-- Tag fast, critical tests `{ tag: '@smoke' }`; `npm run test:smoke` runs them.
+- Tag fast, critical tests `{ tag: '@smoke' }`; the smoke script runs them
+  (`npm run test:smoke`, or `pw:smoke` when merged into an app's package.json).
 - Credentials come from `test-data/users.ts` (`users.admin()`), never literals.
 
 ## After adding a page or spec
 
 ```bash
-npm run typecheck && npm run lint && npm run check
+npm run typecheck && npm run lint && npm run check     # merged: pw:typecheck, pw:lint, pw:check
 npx playwright test specs/<feature> --project=chromium
 ```

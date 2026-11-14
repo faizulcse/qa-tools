@@ -7,9 +7,9 @@ A Claude Code / Cowork plugin marketplace with three plugins:
   writes reports.
 - **git-agent**: drafts a commit message (title + description) from your
   current changes, in the repo's existing style.
-- **pw-setup-agent**: sets up a Playwright + TypeScript test project in
-  `tests/` with page objects, fixtures and typed test data, and checks that it
-  follows the conventions.
+- **pw-setup-agent**: sets up a Playwright + TypeScript test project at the
+  repository root (or in `tests/`) with page objects, fixtures and typed test
+  data, and checks that it follows the conventions.
 
 You don't need MCP servers or connectors. Everything runs on small bundled
 scripts.
@@ -157,7 +157,7 @@ Full documentation: [`plugins/git-agent/README.md`](plugins/git-agent/README.md)
 
 | Skill | Say | Produces |
 | --- | --- | --- |
-| `pw-setup` | "set up Playwright with TypeScript" | A `tests/` project with config, page objects, fixtures, typed test data, `.env` and lint rules |
+| `pw-setup` | "set up Playwright with TypeScript" | A test project at the repo root (merged safely into an existing app) or in `tests/`, with config, page objects, fixtures, typed test data, `.env` and lint rules |
 | `pw-check` | "check my Playwright setup" | A structure and conventions report (also `npm run check` in the project) |
 | `pw-page-objects` | "add a page object for the settings page" | Page objects and fixtures that follow the project conventions |
 | `pw-locators` | "which locator should I use" | Role- and label-based locators instead of CSS or XPath |

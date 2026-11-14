@@ -3,16 +3,20 @@
  * check_setup.mjs - verify a Playwright test project follows the
  * pw-setup-agent conventions.
  *
- *   node check_setup.mjs --root tests          levels 1-2 (read-only)
- *   node check_setup.mjs --root tests --json   machine-readable output
+ *   node check_setup.mjs                  levels 1-2 (read-only), project at the repo root
+ *   node check_setup.mjs --root tests     project in a sub-folder
+ *   node check_setup.mjs --json           machine-readable output
  *
  * Level 1 - structure: folders, config, tsconfig, .gitignore, env files, manifest.
  * Level 2 - conventions: page objects, fixtures, imports, locators, waits,
  *           secrets, artifact settings.
  *
  * Read-only: it never changes files and never prints .env values.
- * Copied into projects as tests/utils/check-setup.mjs (`npm run check`), so
- * CI can run it without the plugin. Node 18+, no dependencies.
+ * Copied into projects as utils/check-setup.mjs (`npm run check`, or
+ * `pw:check` when merged into an app's package.json), so CI can run it
+ * without the plugin. Reads pw-setup.json for the config file names, script
+ * names and package manager. In a merged project it checks only the test
+ * project's files, never the app's. Node 18+, no dependencies.
  *
  * Exit codes: 0 no failures (warnings allowed), 1 at least one failure,
  * 2 bad arguments or the root folder does not exist.
@@ -156,6 +160,26 @@ const envKeys = (text) => text.split(/\r?\n/).map((l) => l.match(ENV_LINE)?.[1])
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
+// The manifest says how the project was set up: file names, scripts, package manager.
+let manifest = null;
+let manifestError = false;
+if (has('pw-setup.json')) {
+  try {
+    manifest = JSON.parse(read('pw-setup.json'));
+  } catch {
+    manifestError = true;
+  }
+}
+const TSCONFIG = manifest?.configs?.tsconfig ?? 'tsconfig.json';
+const SPLIT = TSCONFIG !== 'tsconfig.json';
+const PM = manifest?.packageManager ?? 'npm';
+const SCRIPT = { envInit: 'env:init', ...manifest?.scripts };
+const RUN = { npm: 'npm run', pnpm: 'pnpm', yarn: 'yarn', bun: 'bun run' }[PM] ?? 'npm run';
+/** The command to run one of the project's scripts, e.g. "npm run env:init". */
+const cmd = (key) => `${RUN} ${SCRIPT[key]}`;
+/** Extra args after a script name: npm needs "--", the others do not. */
+const cmdArgs = (key, args) => `${cmd(key)}${PM === 'npm' ? ' --' : ''} ${args}`;
+
 // ---------------------------------------------------------------- level 1: structure
 
 const L1 = 'Structure';
@@ -186,6 +210,18 @@ if (!configFile) {
 } else {
   report(L1, 'Config file', 'pass', { detail: configFile });
 
+  if (SPLIT) {
+    if (new RegExp(`tsconfig\\s*:\\s*['"\`]\\.?/?${TSCONFIG.replace(/\./g, '\\.')}['"\`]`).test(config)) {
+      report(L1, 'Config: tsconfig', 'pass', { detail: `'./${TSCONFIG}'` });
+    } else {
+      report(L1, 'Config: tsconfig', 'fail', {
+        detail: `playwright.config.ts does not point at ${TSCONFIG}`,
+        hint: `Add tsconfig: './${TSCONFIG}' so Playwright resolves the @pages, @fixtures, @data and @utils aliases.`,
+        skill: 'pw-core-config',
+      });
+    }
+  }
+
   if (/testDir\s*:\s*['"`]\.?\/?specs\/?['"`]/.test(config)) {
     report(L1, 'Config: testDir', 'pass', { detail: "'./specs'" });
   } else {
@@ -213,18 +249,18 @@ if (!configFile) {
   }
 }
 
-if (!has('tsconfig.json')) {
+if (!has(TSCONFIG)) {
   report(L1, 'TypeScript config', 'fail', {
-    detail: 'tsconfig.json not found',
+    detail: `${TSCONFIG} not found`,
     hint: 'Re-run pw-setup to add tsconfig.json.',
     skill: 'pw-core-config',
   });
 } else {
   let ts = null;
   try {
-    ts = parseJsonc(read('tsconfig.json'));
+    ts = parseJsonc(read(TSCONFIG));
   } catch (err) {
-    report(L1, 'TypeScript config', 'fail', { detail: `tsconfig.json is not valid JSON: ${err.message}` });
+    report(L1, 'TypeScript config', 'fail', { detail: `${TSCONFIG} is not valid JSON: ${err.message}` });
   }
   if (ts) {
     const co = ts.compilerOptions || {};
@@ -251,7 +287,7 @@ if (!has('tsconfig.json')) {
     if (broken.length) {
       report(L1, 'TypeScript: path aliases', 'fail', {
         detail: `aliases point at missing files: ${broken.join('; ')}`,
-        hint: 'Fix the paths in tsconfig.json or restore the missing folder.',
+        hint: `Fix the paths in ${TSCONFIG} or restore the missing folder.`,
         skill: 'pw-core-config',
       });
     } else if (missingAliases.length) {
@@ -348,7 +384,7 @@ const exampleKeys = has('.env.example') ? envKeys(read('.env.example')) : null;
   } else if (!has('.env')) {
     report(L1, '.env file', 'warn', {
       detail: '.env not found',
-      hint: 'Run `npm run env:init`, then fill in the empty values.',
+      hint: `Run \`${cmd('envInit')}\`, then fill in the empty values.`,
       skill: 'pw-setup',
     });
   } else {
@@ -356,7 +392,7 @@ const exampleKeys = has('.env.example') ? envKeys(read('.env.example')) : null;
     if (missing.length) {
       report(L1, '.env file', 'warn', {
         detail: `missing keys: ${missing.join(', ')}`,
-        hint: 'Run `npm run env:init -- --sync` to add them.',
+        hint: `Run \`${cmdArgs('envInit', '--sync')}\` to add them.`,
         skill: 'pw-setup',
       });
     } else {
@@ -365,15 +401,11 @@ const exampleKeys = has('.env.example') ? envKeys(read('.env.example')) : null;
   }
 }
 
-if (has('pw-setup.json')) {
-  let manifest = null;
-  try {
-    manifest = JSON.parse(read('pw-setup.json'));
-  } catch {
-    /* reported below */
-  }
-  if (manifest) report(L1, 'Setup manifest', 'pass', { detail: `pw-setup-agent ${manifest.pluginVersion}, ${manifest.createdAt}` });
-  else report(L1, 'Setup manifest', 'warn', { detail: 'pw-setup.json is not valid JSON' });
+if (manifest) {
+  const mode = manifest.mode ? `, ${manifest.mode}` : '';
+  report(L1, 'Setup manifest', 'pass', { detail: `pw-setup-agent ${manifest.pluginVersion}${mode}, ${manifest.createdAt}` });
+} else if (manifestError) {
+  report(L1, 'Setup manifest', 'warn', { detail: 'pw-setup.json is not valid JSON' });
 } else {
   report(L1, 'Setup manifest', 'warn', {
     detail: 'pw-setup.json not found',

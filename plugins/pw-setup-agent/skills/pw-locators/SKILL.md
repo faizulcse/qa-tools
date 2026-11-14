@@ -48,7 +48,7 @@ the HTML:
 - **playwright-cli** (if installed): `playwright-cli open <url>` then
   `playwright-cli snapshot`. The snapshot lists roles and accessible names,
   which map directly to `getByRole`.
-- **Codegen:** `cd tests && npx playwright codegen <url>`. Click the element;
+- **Codegen:** `npx playwright codegen <url>` in the project folder. Click the element;
   Codegen suggests a role-based locator. Review it against the priority
   table, do not paste it blindly.
 - **Check uniqueness** before writing it into a page object:

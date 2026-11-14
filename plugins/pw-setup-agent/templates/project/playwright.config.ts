@@ -7,7 +7,7 @@ import { env } from './utils/env';
  */
 export default defineConfig({
   testDir: './specs',
-  outputDir: './test-results',
+{{TSCONFIG_LINE}}  outputDir: './test-results',
 
   fullyParallel: true,
   forbidOnly: env.isCI,

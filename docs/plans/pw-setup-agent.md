@@ -1,8 +1,8 @@
 # pw-setup-agent: Plan
 
 Status: Phase 1 released as pw-setup-agent 0.1.0 in qa-tools marketplace 0.4.0.
-Next: the root layout (pw-setup-agent 0.2.0), planned below; not built yet.
-Code changes for it wait for explicit approval.
+Next: the root layout (pw-setup-agent 0.2.0) is built and tested, not released yet.
+The auth sessions (Phase 2) are planned, not built.
 
 ### Phase 1 notes (changes from the original plan)
 

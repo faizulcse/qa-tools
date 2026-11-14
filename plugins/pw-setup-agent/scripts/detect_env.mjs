@@ -2,12 +2,15 @@
 /**
  * detect_env.mjs - inspect the current repository before scaffolding.
  *
- *   node detect_env.mjs [--root tests] [--json]
+ *   node detect_env.mjs [--root DIR] [--json]       --root defaults to . (the repo root)
  *
  * Run from the repository root. Reports the Node and npm versions, the
- * package manager the repo uses, whether it is a git repo, and anything that
- * would clash with a scaffold into --root: an existing Playwright install or
- * config, a non-empty target folder, or an earlier pw-setup manifest.
+ * package manager the repo uses, whether it is a git repo, the mode scaffold
+ * would use (standalone, merged or subfolder), and anything that would clash:
+ * an existing Playwright install or config, the app's own tsconfig or ESLint
+ * config, project folders that already hold files, a framework that routes a
+ * root pages/ folder (Next.js, Nuxt), env keys the app already uses, or an
+ * earlier pw-setup manifest. scaffold.mjs makes the final call.
  *
  * Exit codes: 0 ready, 1 blocked (Node too old), 2 bad arguments.
  * Warnings (existing files) still exit 0; pw-setup decides what to do.
@@ -20,7 +23,7 @@ import { join, relative, resolve } from 'node:path';
 const MIN_NODE = [20, 12]; // Playwright needs 20+; process.loadEnvFile needs 20.12+
 
 function parseArgs(argv) {
-  const opts = { root: 'tests', json: false };
+  const opts = { root: '.', json: false };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--root') opts.root = argv[++i];
     else if (argv[i] === '--json') opts.json = true;
@@ -91,10 +94,40 @@ function main() {
     'bun.lock': 'bun',
   };
   report.repoPackageManager = Object.entries(lockfiles).find(([f]) => existsSync(join(cwd, f)))?.[1] ?? null;
-  if (report.repoPackageManager && report.repoPackageManager !== 'npm') {
+
+  const isRoot = target === cwd;
+  const appPkg = isRoot ? readJson(join(cwd, 'package.json')) : null;
+  report.mode = !isRoot ? 'subfolder' : existsSync(join(cwd, 'package.json')) ? 'merged' : 'standalone';
+  report.packageManager = report.mode === 'merged' ? report.repoPackageManager ?? 'npm' : 'npm';
+  if (report.repoPackageManager && report.repoPackageManager !== 'npm' && report.mode !== 'merged') {
     report.warnings.push(
       `The repo uses ${report.repoPackageManager}. The test project in ${opts.root}/ has its own package.json and uses npm.`,
     );
+  }
+
+  report.decisions = [];
+  if (report.mode === 'merged') {
+    const deps = appPkg ? { ...appPkg.dependencies, ...appPkg.devDependencies, ...appPkg.peerDependencies } : {};
+    const router = ['next', 'nuxt'].find((f) => deps[f]);
+    if (router) {
+      report.warnings.push(`${router === 'next' ? 'Next.js' : 'Nuxt'} app: a root pages/ folder becomes app routes. Use --root tests.`);
+    }
+    const dirs = ['specs', 'pages', 'fixtures', 'test-data', 'utils'].filter((d) => {
+      try {
+        return statSync(join(cwd, d)).isDirectory() && readdirSync(join(cwd, d)).length > 0;
+      } catch {
+        return false;
+      }
+    });
+    if (dirs.length) report.warnings.push(`Folders the tests need already hold files: ${dirs.join(', ')}. Use --root tests.`);
+    const ownConfigs = ['tsconfig.json', 'eslint.config.js', 'eslint.config.mjs', 'eslint.config.cjs', 'eslint.config.ts', '.eslintrc', '.eslintrc.js', '.eslintrc.cjs', '.eslintrc.json', '.eslintrc.yml', '.eslintrc.yaml']
+      .filter((f) => existsSync(join(cwd, f)));
+    if (ownConfigs.length) report.decisions.push(`The app has its own ${ownConfigs.join(', ')}: split configs (--split-configs) or --root tests.`);
+  }
+  const exampleText = existsSync(join(target, '.env.example')) ? readFileSync(join(target, '.env.example'), 'utf8') : '';
+  const clashKeys = ['BASE_URL', 'TEST_ENV'].filter((k) => new RegExp(`^\\s*${k}\\s*=`, 'm').test(exampleText));
+  if (clashKeys.length && !existsSync(join(target, 'pw-setup.json'))) {
+    report.decisions.push(`.env.example already has ${clashKeys.join(', ')}: --env-prefix E2E_ or --reuse-env-keys.`);
   }
 
   const gitRoot = tryRun('git', ['rev-parse', '--show-toplevel'], cwd);
@@ -120,7 +153,7 @@ function main() {
 
   report.targetExists = existsSync(target);
   report.targetFiles = [];
-  if (report.targetExists) {
+  if (report.targetExists && !isRoot) {
     if (!statSync(target).isDirectory()) {
       report.blockers.push(`${opts.root} exists and is not a folder.`);
     } else {
@@ -150,9 +183,11 @@ function main() {
     console.log(`Node:             ${process.version} ${report.node.ok ? 'ok' : 'TOO OLD'}`);
     console.log(`npm:              ${report.npm ?? 'not found'}`);
     console.log(`Repo pkg manager: ${report.repoPackageManager ?? 'none detected'}`);
+    console.log(`Mode:             ${report.mode} (installs with ${report.packageManager})`);
     console.log(`Git repository:   ${gitRoot ?? 'no'}`);
     for (const b of report.blockers) console.log(`BLOCKER: ${b}`);
     for (const w of report.warnings) console.log(`WARNING: ${w}`);
+    for (const d of report.decisions) console.log(`DECISION: ${d}`);
     console.log(report.ready ? 'Ready to scaffold.' : 'Not ready: fix the blockers first.');
   }
   process.exit(report.ready ? 0 : 1);

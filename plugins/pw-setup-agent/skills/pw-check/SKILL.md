@@ -22,14 +22,25 @@ Verify that a test project follows the pw-setup-agent conventions. The check is
 From the repository root:
 
 ```bash
-node "$CLAUDE_PLUGIN_ROOT/scripts/check_setup.mjs" --root tests
+node "$CLAUDE_PLUGIN_ROOT/scripts/check_setup.mjs"               # project at the root
+node "$CLAUDE_PLUGIN_ROOT/scripts/check_setup.mjs" --root tests  # project in a sub-folder
 ```
 
-Inside the project (works without the plugin, and on CI):
+Find the project by its `pw-setup.json`: at the root, or in a sub-folder for
+projects set up with `--root` (all 0.1.0 projects are in `tests/`).
+
+Inside the project (works without the plugin, and on CI), with the package
+manager and script name from `pw-setup.json`:
 
 ```bash
-cd tests && npm run check
+npm run check          # standalone or sub-folder (cd tests first)
+npm run pw:check       # merged into an app's package.json (pnpm pw:check, yarn pw:check...)
 ```
+
+The check reads `pw-setup.json` for the tsconfig name (`tsconfig.e2e.json` in
+merged mode with split configs), the script names and the package manager, so
+its fix hints name the right commands. In a merged project it looks only at
+the test project's files, never at the app's code.
 
 Add `--json` to parse the results. Exit code `0` means no failures (warnings are
 allowed), `1` means at least one failure, `2` means bad arguments or the folder
@@ -75,7 +86,8 @@ code 2 and a message.
 - **Offer to fix** findings one rule at a time, and show the change before
   making it. Do not fix everything silently.
 - **`.env` is tracked by git:** treat this as urgent. Tell the user to run
-  `git rm --cached tests/.env`, commit, and rotate every credential it held.
+  `git rm --cached .env` (in the project folder), commit, and rotate every
+  credential it held.
   Do not print the file.
 - The CSS count is information only. Mention it only if it is high, and point
   to `pw-locators`.
