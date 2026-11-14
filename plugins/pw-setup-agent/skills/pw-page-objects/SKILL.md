@@ -28,7 +28,7 @@ spec) to copy from.
 | Page object | `pages/` (`page-objects/` in Next.js/Nuxt apps) | `settings.page.ts` → `class SettingsPage extends BasePage` |
 | Component (shared UI) | `pages/components/` | `nav.component.ts` → `class NavComponent` |
 | Fixture registration | `fixtures/pages.fixture.ts` | `settingsPage` |
-| Spec | `specs/<feature>/` (or the adopted `testDir`, e.g. `e2e/<feature>/`) | `settings.spec.ts` |
+| Spec | `tests/<feature>/` (or the adopted `testDir`, e.g. `e2e/<feature>/`) | `settings.spec.ts`; always `.spec.ts`, since `*.test.*` is left to unit tests |
 
 `pw-setup.json` names the actual folders under `folders`. Imports use the
 aliases (`@pages/...`), so they don't depend on the folder names. The app's
@@ -99,5 +99,5 @@ creates one with `new`.
 
 ```bash
 npm run typecheck && npm run lint && npm run check     # merged: pw:typecheck, pw:lint, pw:check
-npx playwright test <specs folder>/<feature> --project=chromium
+npx playwright test tests/<feature> --project=chromium
 ```

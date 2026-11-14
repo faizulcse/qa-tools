@@ -7,7 +7,8 @@ Google SSO login (`--auth google-sso`) was tested against a mock app and still
 needs a run against real Google; it includes the auth setup step and session
 reuse below. Session reuse for the username/password template is still Phase 2.
 Next: **0.3.0, always the root and amend what exists** is built and tested
-against seven scenario repos (not released yet). Differences from the plan
+against seven scenario repos (not released yet). The spec folder is `tests/`
+(was `specs/`); see "Specs folder: tests/" below. Differences from the plan
 found while building: apps targeting older than ES2017 also get the
 `tsconfig.e2e.json` exception; `pw-setup.json` also records `preexisting`
 files so pw-check softens findings in them; the Google setup step no longer
@@ -61,8 +62,8 @@ still shows every change before anything is written.
 | `@playwright/test` (or `playwright`) already a dependency | Keep the app's version; no blocker. Note it if it is older than the minimum the templates need (setup projects and `storageState` paths: 1.45+), with the upgrade command; never upgrade automatically |
 | `playwright.config.*` | **Keep it and amend it** (the skill edits it, since it is code; the scaffold reports what to add). Keep its `testDir`, `testMatch`, projects, reporters and timeouts. Add only what is missing: `baseURL` from `env.baseUrl` (a hard-coded `baseURL` moves into `.env.example` as the default `BASE_URL` value, so behaviour stays the same), trace/screenshot/video on failure, a blob reporter on CI, and for Google sign-in the `setup` project plus `dependencies` and `storageState` on the existing browser projects |
 | Its `testDir` (e.g. `e2e/`, `tests/`) | Specs go there: `<testDir>/home/home.spec.ts`, `<testDir>/login/...`, `<testDir>/auth/auth.setup.ts`. The test folder is recorded in `pw-setup.json` (`folders.specs`). If the config's `testMatch` would not collect `*.spec.ts` / `*.setup.ts`, the skill names the files to match or adds the pattern, and confirms with `playwright test --list` |
-| No Playwright config | Create `playwright.config.ts` with `testDir: './specs'`, as before |
-| `pages/`, `fixtures/`, `test-data/`, `utils/`, `specs/` already exist | Use them. Template files are added only where the same file does not exist; an existing file with the same name is kept, never overwritten (`--force` still refreshes files pw-setup created, listed in the manifest) |
+| No Playwright config | Create `playwright.config.ts` with `testDir: './tests'` (see "Specs folder: tests/" below) |
+| `pages/`, `fixtures/`, `test-data/`, `utils/`, `tests/` already exist | Use them. Template files are added only where the same file does not exist; an existing file with the same name is kept, never overwritten (`--force` still refreshes files pw-setup created, listed in the manifest) |
 | Existing code files the templates rely on (e.g. a `utils/env.ts` or `fixtures/pages.fixture.ts` of the app's own) | Kept. The skill amends them with what the other templates import (a missing export such as `requireEnv`, a missing fixture registration), showing the change first; `typecheck` catches anything missed |
 | Next.js or Nuxt app | Page objects go in **`page-objects/`** instead of `pages/` (a root `pages/` folder is the app's routes there). The `@pages/*` alias points at `page-objects/`, so imports in specs don't change. No more blocker |
 | `tsconfig.json` | **Amended in place** (see below). No more `tsconfig.e2e.json` |
@@ -125,8 +126,8 @@ old, npm missing, an invalid root `package.json`, or not at the repo root.
   before (so pw-check and `--force` never treat them as pw-setup's), and the
   Playwright config file name.
 - **`check_setup.mjs`:** reads `folders` and the config file name from the
-  manifest instead of assuming `specs/` and `pages/`; `testDir` must match
-  `folders.specs` (not literally `./specs`); `strict` off in an adopted
+  manifest instead of assuming the spec and page folders; `testDir` must match
+  `folders.specs` (not a fixed name); `strict` off in an adopted
   tsconfig is a warning; convention checks still cover only the test
   project's folders.
 - **`pw-setup` skill:** no location question and no decision questions. New
@@ -139,6 +140,25 @@ old, npm missing, an invalid root `package.json`, or not at the repo root.
   setup does with what's already there"; the decision and blocker
   sections and the subfolder examples go away; upgrade note for 0.2.0
   subfolder projects (keep working via `--root`, no automatic move).
+
+### Specs folder: `tests/`
+
+The default spec folder is **`tests/`**, not `specs/`: `tests/home/`,
+`tests/login/`, `tests/auth/auth.setup.ts`, `testDir: './tests'`. The
+templates live in `templates/project/tests/` and
+`templates/auth/google-sso/tests/`. An existing Playwright `testDir` still
+wins (e.g. `e2e/`), and `pw-setup.json` keeps the key name `folders.specs`.
+
+`tests/` is a common folder, so three cases need handling:
+
+| Case | Handling |
+|---|---|
+| **Jest or Vitest** in the app | Their default patterns match `tests/**/*.spec.ts` too, so they would run the Playwright specs. The dry run lists an `AMEND` for their config (`jest.config.*`, the `jest` key in `package.json`, `vitest.config.*` / `vite.config.*`, or a new one): Jest `testPathIgnorePatterns` keeps `'/node_modules/'` and adds `'<rootDir>/tests/.*\.spec\.ts$'`; Vitest `test.exclude` keeps `configDefaults.exclude` and adds `'tests/**/*.spec.ts'`. The skill applies it and runs the unit tests once |
+| **Unit tests already in `tests/`** (`*.test.*` / `*.spec.*` files that don't import `@playwright/test`) | The created Playwright config gets `testMatch: '**/*.spec.ts'` (an adopted config gets that as an `AMEND` item) so Playwright skips them. Convention: Playwright specs are `*.spec.ts`, unit tests `*.test.*`. pw-check treats only `*.spec.ts`, and `*.test.ts` files that use Playwright, as specs |
+| **An older sub-folder project in `tests/`** (`tests/pw-setup.json`, 0.1.0/0.2.0) | **Blocker**: the new specs would land inside it. Move it to the root first (README "Upgrading": its `tests/specs/` becomes `tests/`); until then `check_setup.mjs --root tests` keeps checking it |
+
+Projects set up before this change keep `specs/`: manifests without
+`folders` default to `specs/` in pw-check.
 
 ### Testing the change
 
@@ -285,7 +305,7 @@ doesn't trigger.
 |---|---|
 | Plugin name | `pw-setup-agent`, with skills prefixed `pw-` |
 | Language | TypeScript, `strict: true` |
-| Root folder | 0.1.0: `tests/`, with its own `package.json`. 0.2.0: the repository root by default, `--root tests` optional. From 0.3.0: always the repository root, amending whatever already exists; specs in `specs/` or the existing Playwright `testDir` |
+| Root folder | 0.1.0: `tests/`, with its own `package.json`. 0.2.0: the repository root by default, `--root tests` optional. From 0.3.0: always the repository root, amending whatever already exists; specs in `tests/` (0.2.0: `specs/`) or the existing Playwright `testDir` |
 | Pattern | Page objects plus fixtures; specs import `test` from `@fixtures` |
 | Test data | TS modules and `@faker-js/faker` |
 | CI | GitHub Actions |

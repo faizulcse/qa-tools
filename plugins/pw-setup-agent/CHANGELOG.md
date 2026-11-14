@@ -5,6 +5,18 @@
 Setup **always builds the project at the repository root** and **adopts
 whatever is already there**, amending it instead of refusing or asking.
 
+- **Specs live in `tests/`** (was `specs/`): `tests/home`, `tests/login`,
+  `tests/auth/auth.setup.ts`, `testDir: './tests'`. An existing Playwright
+  `testDir` still wins. Because `tests/` is shared ground:
+  - Jest and Vitest configs get an exclude for `tests/**/*.spec.ts` (listed
+    for the skill), since their default patterns would run the specs too.
+  - If `tests/` already holds unit tests, the Playwright config gets
+    `testMatch: '**/*.spec.ts'`; pw-check treats only `*.spec.ts` (and
+    `*.test.ts` files that use Playwright) as specs.
+  - An older sub-folder project in `tests/` (`tests/pw-setup.json`) blocks
+    setup until it is moved to the root (README "Upgrading").
+  - Projects set up before 0.3.0 keep `specs/`: older manifests default to it.
+
 - **Removed:** the sub-folder mode and `scaffold.mjs --root`, `--split-configs`
   and `--reuse-env-keys`; the blockers for an existing Playwright setup,
   Next.js/Nuxt and non-empty project folders; the split-config and env-key

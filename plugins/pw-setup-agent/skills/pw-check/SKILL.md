@@ -62,8 +62,8 @@ does not exist.
 
 | Check | Passes when |
 |---|---|
-| Folders | the spec and page-object folders from `pw-setup.json` (default `specs/`, `pages/`), `fixtures/`, `test-data/`, `utils/` exist |
-| Config | `playwright.config.ts` exists, `testDir` is `./specs`, `baseURL` comes from env |
+| Folders | the spec and page-object folders from `pw-setup.json` (default `tests/`, `pages/`; `specs/` in projects set up before 0.3.0), `fixtures/`, `test-data/`, `utils/` exist |
+| Config | the Playwright config exists, `testDir` matches the spec folder (`./tests` by default), `baseURL` comes from env |
 | TypeScript | `strict: true`; aliases `@pages/*`, `@fixtures`, `@data/*`, `@utils/*` exist and point at real folders |
 | Gitignore | `.env`, `.auth/`, `test-results/`, `playwright-report/` are ignored |
 | Env example | every variable the code reads is listed in `.env.example` |
@@ -76,7 +76,7 @@ does not exist.
 |---|---|
 | Page objects | every `*.page.ts` in the page-object folder extends `BasePage`; no `expect` outside `waitForReady()`; no `expect` in components |
 | Fixtures | every page object is created in `fixtures/`; specs never call `new XxxPage(page)` |
-| Imports | specs import `test` from `@fixtures`, not `@playwright/test` |
+| Imports | specs import `test` from `@fixtures`, not `@playwright/test`. Specs are `*.spec.ts` files (and `*.test.ts` files that use Playwright); Jest/Vitest unit tests sharing `tests/` are not checked |
 | Locators | no XPath, no `page.$` / `$$` / `$eval`; CSS locators are counted (info) |
 | Waits | no `waitForTimeout`, no `.only`; `waitForSelector` and `networkidle` are warnings |
 | Secrets | no string literal assigned to a password, token, secret or API key in specs, pages or fixtures |

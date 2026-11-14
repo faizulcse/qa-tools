@@ -11,11 +11,11 @@
  * testDir, Playwright dependencies, the app's tsconfig and ESLint config,
  * project folders that already hold files, Next.js/Nuxt (page objects then go
  * in page-objects/), env keys the tests will reuse, and an earlier pw-setup
- * manifest (here, or in tests/ from 0.1.0/0.2.0). scaffold.mjs makes the
- * detailed plan.
+ * manifest. An older sub-folder project in tests/ (0.1.0/0.2.0) blocks setup,
+ * since tests/ is now the specs folder. scaffold.mjs makes the detailed plan.
  *
  * Exit codes: 0 ready, 1 blocked (Node too old, npm missing, not the repo
- * root, invalid package.json), 2 bad arguments.
+ * root, invalid package.json, an older project in tests/), 2 bad arguments.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -97,7 +97,7 @@ function main() {
   if (framework) report.notes.push(`${framework} app: page objects go in page-objects/ (pages/ is the app's routes).`);
 
   const pwConfig = ['ts', 'mts', 'cts', 'js', 'mjs', 'cjs'].map((e) => `playwright.config.${e}`).find((f) => existsSync(join(cwd, f)));
-  report.specsDir = 'specs';
+  report.specsDir = 'tests';
   if (pwConfig) {
     const testDir = readFileSync(join(cwd, pwConfig), 'utf8').match(/\btestDir\s*:\s*(['"`])([^'"`]+)\1/)?.[2];
     const norm = testDir?.replace(/^\.\//, '').replace(/\/$/, '');
@@ -122,9 +122,12 @@ function main() {
     report.notes.push(`Already set up by pw-setup-agent ${report.manifest.pluginVersion} on ${report.manifest.createdAt}. Use pw-check instead of scaffolding again.`);
   }
   const legacy = readJson(join(cwd, 'tests', 'pw-setup.json'));
-  if (legacy) {
+  if (legacy && !report.manifest) {
     report.legacy = 'tests';
-    report.notes.push(`tests/ holds a pw-setup-agent ${legacy.pluginVersion} project (sub-folder layout). It keeps working: check it with check_setup.mjs --root tests.`);
+    report.blockers.push(`tests/ holds a pw-setup-agent ${legacy.pluginVersion} project (sub-folder layout), and tests/ is now the specs folder. Move it to the root first (see "Upgrading" in the README); until then check it with check_setup.mjs --root tests.`);
+  }
+  for (const runner of ['jest', 'vitest'].filter((x) => deps[x])) {
+    report.adopts.push(`${runner} (kept; its config gets an exclude for ${report.specsDir}/**/*.spec.ts so it doesn't run the Playwright specs)`);
   }
 
   report.ready = report.blockers.length === 0;

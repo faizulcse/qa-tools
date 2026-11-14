@@ -40,7 +40,7 @@ report what happened without writing code, that is `qa-agent:qa-test-ui`.
 ├── eslint.config.mjs         created, or the app's ESLint config amended
 ├── .env.example / .env       keys added; .env is gitignored
 ├── .gitignore · .nvmrc · pw-setup.json (manifest read by pw-check)
-├── specs/                    or the existing Playwright testDir (e.g. e2e/)
+├── tests/                    the specs, or the existing Playwright testDir (e.g. e2e/)
 ├── pages/                    page-objects/ in Next.js and Nuxt apps
 ├── fixtures/pages.fixture.ts page objects as fixtures
 ├── test-data/                types.ts, users.ts (credentials from env)
@@ -48,7 +48,7 @@ report what happened without writing code, that is `qa-agent:qa-test-ui`.
 ```
 
 With `--auth google-sso` (see "Google sign-in" below) it also adds
-`<specs>/auth/auth.setup.ts`, `utils/auth.ts`, `utils/chrome-profile.ts`,
+`tests/auth/auth.setup.ts`, `utils/auth.ts`, `utils/chrome-profile.ts`,
 `utils/login-chrome.mjs` and `<pages>/components/google-sign-in.component.ts`,
 and the login and home pages and specs are the Google versions.
 
@@ -62,7 +62,9 @@ and the login and home pages and specs are the Google versions.
 | `playwright.config.*` | Kept, including its `testDir`, projects and reporters. New specs go in its `testDir`. Missing pieces are **amended by you** (Step 4) |
 | `tsconfig.json` | Amended in place by the script, comments kept: path aliases (relative to `baseUrl` if set), the test folders in `include`, `node` types. `strict`, `target`, `module` never change. Exception: `nodenext` resolution or a target older than ES2017 → a small `tsconfig.e2e.json` that extends it |
 | ESLint config | Kept; a Playwright rules block is **amended by you** (Step 4) |
-| `pages/`, `fixtures/`, `test-data/`, `utils/`, the spec folder | Used. Files with the same name are kept, never overwritten. If a kept file lacks something the templates import, **you** add it (Step 4) |
+| `tests/`, `pages/`, `fixtures/`, `test-data/`, `utils/` | Used. Files with the same name are kept, never overwritten. If a kept file lacks something the templates import, **you** add it (Step 4) |
+| Jest / Vitest | Kept. Their default patterns also match `tests/**/*.spec.ts`, so their config gets an exclude for the Playwright specs (**amended by you**, Step 4). If `tests/` already holds unit tests, the Playwright config gets `testMatch: '**/*.spec.ts'` so Playwright skips them |
+| An older pw-setup project in `tests/` (`tests/pw-setup.json`, 0.1.0/0.2.0) | **Blocks** setup: `tests/` is the specs folder now. Move that project to the root first (README "Upgrading") |
 | Next.js / Nuxt | Page objects go in `page-objects/` (their `pages/` is routes); `@pages` points there |
 | `.gitignore`, `.env.example`, `.env` | Missing entries/keys appended; `.env` never replaced |
 | Env keys such as `BASE_URL` | Reused. `--env-prefix E2E_` only if the user wants separate keys |
@@ -83,9 +85,10 @@ an `ADOPTS:` line for each thing it will keep and amend.
   20.12, npm missing, not the repo root, or an invalid `package.json`.
 - **`pw-setup.json` already exists:** the project was set up before. Do not
   scaffold again; switch to `pw-check`.
-- **A `tests/pw-setup.json` (0.1.0/0.2.0 sub-folder project):** it keeps
-  working; check it with `check_setup.mjs --root tests`. Ask before setting up
-  a second project at the root.
+- **A `tests/pw-setup.json` (0.1.0/0.2.0 sub-folder project):** setup is
+  blocked, because `tests/` is the specs folder now. Offer to move that
+  project to the root (README "Upgrading"); until then it keeps working with
+  `check_setup.mjs --root tests`.
 
 Then look at how the app signs in. Ask for the app URL if you don't have it
 (or take it from the existing Playwright config), and open its login page:
@@ -176,6 +179,12 @@ the diff before saving. Rules:
   array entry, or `overrides` for `.eslintrc*`). If the config doesn't parse
   TypeScript for the test folders, scope `typescript-eslint`'s recommended
   config (flat) or `@typescript-eslint/parser` + plugin (legacy) to them.
+- **Jest / Vitest config:** add the exclude for the Playwright specs, keeping
+  the existing patterns (Jest's default `testPathIgnorePatterns` is
+  `['/node_modules/']`; Vitest's is `configDefaults.exclude`). If there is no
+  config yet, add a `jest` key to `package.json` or create
+  `vitest.config.ts`. Then run the unit tests once to confirm they still run
+  and don't pick up the specs.
 - **App code files** (e.g. the app's own `utils/env.ts` or
   `fixtures/pages.fixture.ts`): add the missing exports or fixture
   registrations, matching the template named in the item, next to what is
@@ -265,7 +274,7 @@ and add:
   the screen: it opens a Chrome window and may wait for them.
 - If the run fails with "Google blocked the sign-in", the sign-in happened in
   a Playwright-launched browser (for example a spec that signs in itself).
-  Sign-in belongs only in `<specs>/auth/auth.setup.ts`, which is
+  Sign-in belongs only in `tests/auth/auth.setup.ts`, which is
   self-contained and doesn't depend on the app's page objects.
 - "The Chrome profile ... is already open": a Chrome window still uses
   `.auth/chrome-profile/<role>/`. Close it and run again.

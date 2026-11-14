@@ -36,7 +36,8 @@ changing it, run `npx playwright test --list` and the `check` script
 
 | Setting | Value | Why |
 |---|---|---|
-| `testDir` | `./specs` (or the adopted config's, e.g. `./e2e`) | Only specs are collected; pages and fixtures are never run as tests. pw-check requires it to match `folders.specs`. |
+| `testDir` | `./tests` (or the adopted config's, e.g. `./e2e`) | Only specs are collected; pages and fixtures are never run as tests. pw-check requires it to match `folders.specs` in `pw-setup.json`. |
+| `testMatch` | `'**/*.spec.ts'`, only when unit tests share `tests/` | Playwright then ignores the Jest/Vitest `*.test.*` files there. Name Playwright specs `*.spec.ts`. |
 | `outputDir` | `./test-results` | Traces, screenshots and videos for failed tests. Gitignored. |
 | `fullyParallel` | `true` | Tests in one file run in parallel too. Requires independent tests. |
 | `forbidOnly` | `env.isCI` | A forgotten `.only` fails CI instead of silently skipping the rest. |
@@ -114,7 +115,7 @@ projects: [
 ],
 ```
 
-- `setup` runs `<specs>/auth/auth.setup.ts` once before the browser projects. It
+- `setup` runs `tests/auth/auth.setup.ts` once before the browser projects. It
   gets 5 minutes because the first sign-in may wait for the user.
 - Every browser project needs `dependencies: ['setup']` and a `storageState`.
   Add both when you add a browser. To run a project as another role, point

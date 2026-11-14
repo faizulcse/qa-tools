@@ -87,7 +87,7 @@ export const test = base.extend<Pages>({
 });
 ```
 
-## specs/settings/settings.spec.ts
+## tests/settings/settings.spec.ts
 
 ```ts
 import { test, expect } from '@fixtures';

@@ -373,7 +373,7 @@ const exampleKeys = has('.env.example') ? envKeys(read('.env.example')) : null;
     ...listFiles(DIRS.testData, (n) => n.endsWith('.ts')),
     ...listFiles(DIRS.fixtures, (n) => n.endsWith('.ts')),
     ...listFiles(DIRS.pages, (n) => n.endsWith('.ts')),
-    ...listFiles(DIRS.specs, (n) => n.endsWith('.ts')),
+    ...listFiles(DIRS.specs, (n) => n.endsWith('.ts') && !/\.test\.ts$/.test(n)),
   ];
   const used = new Map();
   const patterns = [
@@ -462,7 +462,9 @@ const L2 = 'Conventions';
 
 const pageFiles = listFiles(DIRS.pages, (n) => n.endsWith('.page.ts')).filter((f) => !f.endsWith('base.page.ts'));
 const componentFiles = listFiles(DIRS.pages, (n) => n.endsWith('.component.ts'));
-const specFiles = listFiles(DIRS.specs, (n) => /\.(spec|test)\.ts$/.test(n));
+// Playwright specs: *.spec.ts, or a *.test.ts that uses Playwright. Unit tests (Jest/Vitest) sharing tests/ are left alone.
+const specFiles = listFiles(DIRS.specs, (n) => /\.(spec|test)\.ts$/.test(n))
+  .filter((f) => f.endsWith('.spec.ts') || /from\s+['"](?:@playwright\/test|@fixtures)['"]/.test(read(f)));
 const setupFiles = listFiles(DIRS.specs, (n) => n.endsWith('.setup.ts'));
 const fixtureFiles = listFiles(DIRS.fixtures, (n) => n.endsWith('.ts'));
 const code = (rel) => stripComments(read(rel));

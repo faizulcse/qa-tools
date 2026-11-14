@@ -401,7 +401,7 @@ function inspect(opts, root) {
   // Existing Playwright config: keep it; specs go in its testDir.
   const pwConfig = PLAYWRIGHT_CONFIGS.find((f) => existsSync(join(root, f))) ?? null;
   const pw = { file: pwConfig };
-  let specsDir = previous?.folders?.specs ?? 'specs';
+  let specsDir = previous?.folders?.specs ?? 'tests';
   // Read on every run: a re-run only lists what is still missing from an adopted config.
   if (pwConfig) {
     const text = read(join(root, pwConfig));
@@ -426,6 +426,26 @@ function inspect(opts, root) {
     pw.hasStorageState = /\bstorageState\s*:/.test(text);
     pw.importsEnv = /from\s+['"`]\.\/utils\/env['"`]/.test(text);
     pw.importsAuth = /from\s+['"`]\.\/utils\/auth['"`]/.test(text);
+  }
+
+  // A 0.1.0/0.2.0 project lives in tests/ with its own manifest: the new specs would land inside it.
+  if (!previous && existsSync(join(root, 'tests', 'pw-setup.json'))) {
+    blockers.push('tests/ holds an older pw-setup-agent project (tests/pw-setup.json). The specs folder is tests/ now, so move that project to the root first (see "Upgrading" in the README), or keep checking it with check_setup.mjs --root tests.');
+  }
+
+  // Unit test runners whose default patterns also match tests/**/*.spec.ts, and unit tests already in the spec folder.
+  const unitRunners = ['jest', 'vitest'].filter((r) => deps[r]);
+  const unitTests = existsSync(join(root, specsDir)) && statSync(join(root, specsDir)).isDirectory()
+    ? walk(join(root, specsDir))
+      .filter((f) => /\.(test|spec)\.[cm]?[jt]sx?$/.test(f) && !f.includes('node_modules'))
+      .filter((f) => !/from\s+['"]@playwright\/test['"]/.test(read(f)))
+      .map((f) => posix(relative(root, f)))
+    : [];
+  const unitConfig = ['jest.config.ts', 'jest.config.js', 'jest.config.mjs', 'jest.config.cjs', 'jest.config.json',
+    'vitest.config.ts', 'vitest.config.mts', 'vitest.config.js', 'vitest.config.mjs', 'vite.config.ts', 'vite.config.mts', 'vite.config.js', 'vite.config.mjs']
+    .find((f) => existsSync(join(root, f))) ?? (deps.jest && app?.jest ? 'package.json' : null);
+  if (unitTests.length) {
+    notes.push(`${specsDir}/ already has ${unitTests.length} unit test file(s) (e.g. ${unitTests[0]}). Playwright is limited to *.spec.ts files so it doesn't run them; keep unit tests named *.test.*.`);
   }
 
   const pwDep = deps['@playwright/test'] ?? deps.playwright;
@@ -467,7 +487,7 @@ function inspect(opts, root) {
 
   const tsMajor = versionOf(deps.typescript)?.[0] ?? 6;
   return {
-    mode, app, deps, lockfile: lockfile ?? null, packageManager, previous, framework, pagesDir, specsDir,
+    mode, app, deps, lockfile: lockfile ?? null, packageManager, previous, framework, pagesDir, specsDir, unitRunners, unitTests, unitConfig,
     pw, tsconfig, eslintConfig, tsMajor, blockers, notes,
   };
 }
@@ -503,6 +523,8 @@ function placeholders(opts, ctx) {
     SPECS_DIR: ctx.specsDir,
     PAGES_DIR: ctx.pagesDir,
     TSCONFIG_LINE: ctx.tsconfigFile !== 'tsconfig.json' ? `  tsconfig: './${ctx.tsconfigFile}',\n` : '',
+    // Only Playwright specs when unit tests share the folder (*.test.* stays theirs).
+    TESTMATCH_LINE: ctx.specOnly ? "  testMatch: '**/*.spec.ts',\n" : '',
     PROJECTS: projectEntries(opts, ctx),
     AUTH_IMPORT: sso ? "import { storageStatePath } from './utils/auth';\n" : '',
     ENV_EXTRA: sso
@@ -783,6 +805,7 @@ function playwrightAmendments(opts, insp, ctx) {
   if (pw.testDirDynamic) items.push(`testDir is computed in code: make sure it resolves to ./${ctx.specsDir}, where the new specs go`);
   else if (!pw.testDir) items.push(`no testDir: Playwright looks everywhere; the new specs go in ${ctx.specsDir}/ (setting testDir: './${ctx.specsDir}' is optional)`);
   if (pw.testMatch) items.push(`testMatch is ${pw.testMatch}: make sure it collects *.spec.ts${ctx.sso ? ' (and the setup project matches *.setup.ts)' : ''}`);
+  else if (ctx.specOnly) items.push(`testMatch: '**/*.spec.ts' (${ctx.specsDir}/ also holds unit tests; Playwright must not run them)`);
   if (ctx.sso) {
     if (!pw.importsAuth) items.push("import { storageStatePath } from './utils/auth';");
     if (!pw.hasSetupProject) items.push("projects: add { name: 'setup', testMatch: /.*\\.setup\\.ts/, timeout: 5 * 60_000 } first");
@@ -849,7 +872,7 @@ function plan(opts, root) {
   const tsconfigFile = insp.tsconfig.exists && insp.tsconfig.needsE2e ? 'tsconfig.e2e.json' : 'tsconfig.json';
   const ctx = {
     merged, sso, scriptNames, cmd, tsconfigFile,
-    specsDir: insp.specsDir, pagesDir: insp.pagesDir,
+    specsDir: insp.specsDir, pagesDir: insp.pagesDir, specOnly: insp.unitTests.length > 0,
     pwConfigFile: insp.pw.file ?? 'playwright.config.ts',
   };
   const values = placeholders(opts, ctx);
@@ -864,7 +887,7 @@ function plan(opts, root) {
     let rel = templateRel;
     const name = basename(rel);
     if (RENAMES[name]) rel = posix(join(dirname(rel), RENAMES[name]));
-    if (rel.startsWith('specs/')) rel = `${ctx.specsDir}/${rel.slice(6)}`;
+    if (rel.startsWith('tests/')) rel = `${ctx.specsDir}/${rel.slice(6)}`;
     if (rel.startsWith('pages/')) rel = `${ctx.pagesDir}/${rel.slice(6)}`;
     let content = fill(read(src), values, relative(PLUGIN_ROOT, src));
     if (rel === 'package.json') {
@@ -962,6 +985,27 @@ function plan(opts, root) {
       files.push(entry);
     }
     amendments.push({ file: insp.eslintConfig, items, snippet });
+  }
+
+  // Jest and Vitest also match *.spec.ts by default: keep them out of the Playwright specs.
+  for (const runner of insp.unitRunners) {
+    const glob = `${ctx.specsDir}/**/*.spec.ts`;
+    const isVitest = runner === 'vitest';
+    const configFile = insp.unitConfig && (isVitest ? /vite/.test(insp.unitConfig) : /jest|package\.json/.test(insp.unitConfig))
+      ? insp.unitConfig
+      : isVitest ? 'vitest.config.ts (create it if there is no Vite/Vitest config)' : 'jest.config.js, or a "jest" key in package.json (create it if there is none)';
+    amendments.push({
+      file: configFile,
+      items: [
+        isVitest
+          ? `test.exclude: keep the current entries (default: configDefaults.exclude) and add '${glob}'`
+          : `testPathIgnorePatterns: keep the current entries (default: '/node_modules/') and add '<rootDir>/${ctx.specsDir}/.*\\.spec\\.ts$'`,
+        `${runner} would otherwise pick up the Playwright specs in ${ctx.specsDir}/ and fail on them`,
+      ],
+      snippet: isVitest
+        ? `import { configDefaults } from 'vitest/config';\n// in defineConfig({ test: { ... } }):\nexclude: [...configDefaults.exclude, '${glob}'],`
+        : `testPathIgnorePatterns: ['/node_modules/', '<rootDir>/${ctx.specsDir}/.*\\.spec\\.ts$'],`,
+    });
   }
 
   // Reused env keys mean the app's BASE_URL value stays; don't override it in .env.

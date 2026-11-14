@@ -59,7 +59,9 @@ first.
 | `playwright.config.*` | Kept, with its `testDir`, projects and reporters. New specs go in its `testDir` (e.g. `e2e/`). The skill adds what's missing: `baseURL` from env (a hard-coded one becomes the `BASE_URL` default, so nothing changes), traces/screenshots/videos on failure, a CI reporter, and the `setup` project for Google sign-in |
 | `tsconfig.json` | Amended in place, comments and formatting kept: the test aliases (relative to `baseUrl` if set), the test folders in `include`, `node` types. `strict`, `target`, `module` and `moduleResolution` never change. Apps on `nodenext` resolution or a target older than ES2017 get a small `tsconfig.e2e.json` that extends theirs instead |
 | ESLint config (flat or `.eslintrc*`) | Kept; the skill adds a block applying the Playwright rules to the spec folder |
-| `pages/`, `fixtures/`, `test-data/`, `utils/`, the spec folder | Used. A file with the same name is kept, never overwritten; if it lacks an export the new files need, the skill adds it. The app's own page objects stay as they are: the example specs are adapted to them |
+| `tests/`, `pages/`, `fixtures/`, `test-data/`, `utils/` | Used. A file with the same name is kept, never overwritten; if it lacks an export the new files need, the skill adds it. The app's own page objects stay as they are: the example specs are adapted to them |
+| Jest or Vitest | Kept. Their config gets an exclude for `tests/**/*.spec.ts` (added by the skill), since their default patterns would run the Playwright specs too. If `tests/` already holds unit tests, Playwright gets `testMatch: '**/*.spec.ts'` so it skips them: name Playwright specs `*.spec.ts` and unit tests `*.test.*` |
+| An older pw-setup project in `tests/` | Setup stops: `tests/` is the specs folder now. Move that project to the root first (see "Upgrading") |
 | Next.js or Nuxt | Page objects go in `page-objects/` (their `pages/` folder is routes); the `@pages` alias points there |
 | `.gitignore`, `.env.example` | Missing entries and keys appended in a `# Playwright (pw-setup-agent)` block |
 | `.env` | Missing keys added; never replaced |
@@ -102,7 +104,7 @@ TypeScript". The `pw-setup` skill then:
 ├── eslint.config.mjs         created, or the app's ESLint config amended
 ├── .env.example / .env       .env is gitignored and created from the example
 ├── .gitignore · .nvmrc · pw-setup.json (manifest read by pw-check)
-├── specs/                    or the existing testDir: home/home.spec.ts (@smoke), login/login.spec.ts
+├── tests/                    or the existing testDir: home/home.spec.ts (@smoke), login/login.spec.ts
 ├── pages/                    page-objects/ in Next.js/Nuxt: base.page.ts, home.page.ts, login.page.ts, components/
 ├── fixtures/pages.fixture.ts page objects as fixtures
 ├── test-data/                types.ts, users.ts (credentials from env)
@@ -160,7 +162,7 @@ to create it.
 | --- | --- |
 | `.auth/<role>.json` | The saved session the tests load. Gitignored |
 | `.auth/chrome-profile/<role>/` | A dedicated Chrome profile per role, used only to sign in. Gitignored |
-| `specs/auth/auth.setup.ts` | Runs before the tests (project `setup`). Reuses the JSON while it is under `AUTH_MAX_AGE_MINUTES` (60) old **and** who-am-I returns 200 with it; otherwise opens Chrome, tries the account from `.env`, and waits up to 4 minutes for you to finish by hand |
+| `tests/auth/auth.setup.ts` | Runs before the tests (project `setup`). Reuses the JSON while it is under `AUTH_MAX_AGE_MINUTES` (60) old **and** who-am-I returns 200 with it; otherwise opens Chrome, tries the account from `.env`, and waits up to 4 minutes for you to finish by hand |
 | `pages/components/google-sign-in.component.ts` | Fills Google's screens when it can: email box or account chooser, password, 2-Step code, consent. Best effort: anything it can't do, you do in the window |
 | `utils/chrome-profile.ts` | Starts Chrome on the profile and connects over CDP |
 | `utils/login-chrome.mjs` | Manual fallback: saves the session from a Chrome you started yourself |
@@ -305,10 +307,24 @@ failures.
 ## Upgrading from 0.1.0 or 0.2.0
 
 Projects set up in `tests/` (0.1.0, or 0.2.0 with `--root tests`) keep
-working: `check_setup.mjs --root tests` checks them. There is no automatic
-move to the root. To move one, move the files out of `tests/` into the root,
-merge its `package.json` and `.gitignore` into the root ones, set
-`"root": "."` in `pw-setup.json`, and run `node utils/check-setup.mjs`.
+working: `check_setup.mjs --root tests` checks them. Setting up a new project
+is blocked while one is there, because `tests/` is now the specs folder.
+There is no automatic move. To move one to the root:
+
+1. Move `tests/pages`, `tests/fixtures`, `tests/test-data`, `tests/utils` and
+   the config files (`playwright.config.ts`, `tsconfig.json`,
+   `eslint.config.mjs`, `.env.example`, `.env`, `.nvmrc`, `pw-setup.json`)
+   to the root, merging any the root already has.
+2. Move the contents of `tests/specs/` up into `tests/`.
+3. Merge `tests/package.json` and `tests/.gitignore` into the root ones, then
+   delete them.
+4. Set `testDir: './tests'` in the config and `"tests/**/*.ts"` in the
+   tsconfig `include`; in `pw-setup.json` set `"root": "."` and
+   `"folders": { "specs": "tests", ... }`.
+5. Run `node utils/check-setup.mjs`.
+
+0.2.0 projects at the root keep their `specs/` folder: pw-check reads the
+folder from `pw-setup.json` (older manifests default to `specs/`).
 
 0.2.0 projects at the root that used `tsconfig.e2e.json` and
 `eslint.e2e.config.mjs` also keep working: their `pw-setup.json` names those
