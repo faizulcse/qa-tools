@@ -553,8 +553,14 @@ function placeholders(opts, ctx) {
   };
 }
 
+/**
+ * Replaces {{NAME}} placeholders. A placeholder may also be written as a
+ * comment, /*{{NAME}}*\/, so the template stays valid code for editors
+ * (e.g. `[/*{{ROLE_LIST}}*\/]` is an empty array until it is filled).
+ */
 function fill(text, values, source) {
-  return text.replace(/\{\{([A-Z_]+)\}\}/g, (m, name) => {
+  return text.replace(/\/\*\{\{([A-Z_]+)\}\}\*\/|\{\{([A-Z_]+)\}\}/g, (m, commented, plain) => {
+    const name = commented ?? plain;
     if (!(name in values)) fail(`Template ${source} uses unknown placeholder ${m}`);
     return values[name];
   });

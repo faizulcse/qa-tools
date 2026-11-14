@@ -6,6 +6,6 @@
  *
  * To add a role: add it here and to ROLES in utils/login-cli.mjs.
  */
-export const roles = [{{ROLE_LIST}}] as const;
+export const roles = [/*{{ROLE_LIST}}*/] as const;
 
 export type Role = (typeof roles)[number];

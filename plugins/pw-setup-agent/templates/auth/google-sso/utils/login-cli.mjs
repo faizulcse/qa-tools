@@ -28,7 +28,7 @@ if (fs.existsSync(envFile)) process.loadEnvFile(envFile);
 // Keep in sync with utils/auth.ts.
 const ME_ENDPOINT = '{{ME_ENDPOINT}}';
 const LOGIN_PATH = '{{LOGIN_PATH}}';
-const ROLES = [{{ROLE_LIST}}];
+const ROLES = [/*{{ROLE_LIST}}*/];
 const P = '{{ENV_PREFIX}}';
 
 const role = process.argv[2] || ROLES[0];
