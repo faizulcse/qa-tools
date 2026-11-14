@@ -1,0 +1,13 @@
+node_modules/
+
+# Local environment: real URLs and credentials. Never commit.
+.env
+.env.bak
+
+# Saved login sessions
+.auth/
+
+# Playwright output
+test-results/
+playwright-report/
+blob-report/
