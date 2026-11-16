@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.7.0
+
+- **Sprint ticket review.** New `qa-sprint` skill and
+  `templates/sprint-review.md`: the sprint's tickets in one table - key,
+  title, status, assignee, whether each is assigned to me now or was earlier,
+  and my QA work (my comment dates, QA report files, and comment drafts not yet
+  posted) - then a summary of what needs action and one next step. Read-only.
+  Works with any project and workflow: project, labels, status order, QA
+  statuses and file names are settings.
+- **`jira_client.py sprint`** gathers it in one call: the sprint search
+  (optionally filtered by labels, matched case-insensitively), the sprint name
+  from the sprint field, the assignee changelog and my comments per ticket,
+  and the files in `docs/<KEY>/`. Without a status order it lists QA statuses
+  first, then by status category; QA statuses default to names containing
+  test, qa, review or verif. `--json` for the skill, a ready Markdown table
+  without it. Every flag has a `.env` default (`JIRA_SPRINT_PROJECT`,
+  `JIRA_SPRINT_LABELS`, `JIRA_SPRINT_STATUS_ORDER`, `JIRA_SPRINT_QA_STATUSES`,
+  `JIRA_SPRINT_DOCS_DIR`, `JIRA_SPRINT_REPORT_FILES`,
+  `JIRA_SPRINT_DRAFT_FILE`). Jira Cloud only.
+- **Setup lists the sprint settings.** `qa-setup.sh` and `qa-setup.mjs` add
+  the main `JIRA_SPRINT_*` keys to `.env.example`, commented out with their
+  defaults. An existing `.env.example` or `.env` is left unchanged, so older
+  workspaces add the keys by hand.
+
 ## 0.6.1
 
 - **`qa-setup.sh` creates `.env`** too, matching `qa-setup.mjs`: it copies

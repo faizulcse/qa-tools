@@ -84,6 +84,16 @@ QA_TOKEN=
 JIRA_BASE_URL=
 JIRA_EMAIL=
 JIRA_API_TOKEN=
+
+# Sprint review (qa-sprint) - optional. Uncomment and set to skip the questions.
+# Jira project key:
+# JIRA_SPRINT_PROJECT=PROJ
+# Only tickets with these labels (comma-separated); empty = every sprint ticket:
+# JIRA_SPRINT_LABELS=
+# Statuses to list first, in order; default = QA statuses first, then by category:
+# JIRA_SPRINT_STATUS_ORDER=
+# Statuses that mean "waiting for QA"; default = names with test/qa/review/verif:
+# JIRA_SPRINT_QA_STATUSES=
 ENV
 fi
 

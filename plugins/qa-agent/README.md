@@ -14,6 +14,7 @@ found - in browser, against APIs, and into Jira.
 | **qa-bug** | "file a bug", "write this up", "what severity is this" | Structured bug report, filed to Jira on approval |
 | **qa-report** | "write the test report", "prepare sign-off" | Self-contained HTML or Markdown cycle report |
 | **qa-jira** | "pull up PROJ-1234", "file it to Jira" | Ticket reads, bug creation, comments, attachments |
+| **qa-sprint** | "show the sprint tickets", "sprint review" | Sprint table: status, assignee, assigned to me (now/earlier), my QA work, what needs action |
 
 The intended loop: **analyze → execute → report defects → summarize → file**.
 Any skill can be used on its own.
@@ -120,6 +121,9 @@ JIRA_API_TOKEN=...
 # Optional, discover with: jira_client.py fields --project PROJ
 JIRA_AC_FIELD=customfield_10101
 JIRA_SEVERITY_FIELD=customfield_10202
+# Optional defaults for qa-sprint (empty labels: every sprint ticket)
+JIRA_SPRINT_PROJECT=PROJ
+JIRA_SPRINT_LABELS=web
 ```
 
 Then verify:
@@ -162,7 +166,7 @@ Jira Data Center/Server: use `JIRA_PAT=` in place of email + token.
 | `scripts/qa_record.py` | Record a playwright-cli run as steps, checks, snapshots, and evidence |
 | `scripts/api_harness.py` | HTTP case runner with redaction and recorded exchanges |
 | `scripts/build_report.py` | Turn `result.json` (and Playwright runner JSON) into an HTML/MD report |
-| `scripts/jira_client.py` | Jira REST: get, search, fields, duplicates, create-bug, comment, attach, transition |
+| `scripts/jira_client.py` | Jira REST: get, search, sprint, fields, duplicates, create-bug, comment, attach, transition |
 
 Templates for hand-written artifacts live in `templates/`:
 
@@ -171,6 +175,7 @@ Templates for hand-written artifacts live in `templates/`:
 | `templates/test-plan.md` | Test plan produced by `qa-analyze` |
 | `templates/bug-report.md` | Bug report produced by `qa-bug` |
 | `templates/jira-comment.md` | Jira comments: Testing Summary (A) and Retest (B) |
+| `templates/sprint-review.md` | Sprint ticket review produced by `qa-sprint` |
 | `templates/example-session.md`, `templates/example-case.py` | Worked examples |
 
 ## Safety rules the skills follow

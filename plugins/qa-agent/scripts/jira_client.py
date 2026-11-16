@@ -5,7 +5,7 @@ Used by the qa-jira skill, interactively and in unattended/CI runs. Calls the
 REST v2 API so descriptions can be plain wiki markup instead of ADF.
 
 Issue search is the one exception: `search` and `duplicates` use the Jira Cloud
-v3 enhanced-search endpoint /rest/api/3/search/jql, because /rest/api/2/search
+v3 enhanced-search endpoint /rest/api/3/search/jql (as does `sprint`), because /rest/api/2/search
 was retired on Cloud. That endpoint is cursor-paged (`nextPageToken`, no
 `startAt`), caps `maxResults` at 100 per page, and returns no `total` - counts
 printed by those two commands are therefore what was actually fetched, not a
@@ -27,12 +27,26 @@ Configuration (environment, or a .env file in the working directory):
     # JIRA_AC_FIELD=customfield_10101        # Acceptance Criteria
     # JIRA_SEVERITY_FIELD=customfield_10202  # Severity
 
+    # Optional defaults for the `sprint` command:
+    # (Comments go on their own line: a trailing "# ..." would become the value.)
+    # Empty labels = every sprint ticket:
+    # JIRA_SPRINT_PROJECT=PROJ
+    # JIRA_SPRINT_LABELS=web
+    # Default status order: QA statuses first, then by status category:
+    # JIRA_SPRINT_STATUS_ORDER=In QA,In Progress,To Do
+    # Default QA statuses: names containing test/qa/review/verif:
+    # JIRA_SPRINT_QA_STATUSES=In QA
+    # JIRA_SPRINT_DOCS_DIR=docs
+    # JIRA_SPRINT_REPORT_FILES=qa-report.md,qa-report.html
+    # JIRA_SPRINT_DRAFT_FILE=jira-comment-draft.md
+
 Commands:
 
     python3 jira_client.py check
     python3 jira_client.py get PROJ-123 [--json] [--comments] [--links]
     python3 jira_client.py search "project = PROJ AND status = 'In QA'" [--max 20]
     python3 jira_client.py fields --project PROJ --issuetype Bug
+    python3 jira_client.py sprint --project PROJ [--labels web] [--sprint "Sprint 12"] [--json]
     python3 jira_client.py create-bug --project PROJ --summary "..." \
         --description-file bug.md --priority High --severity Major \
         --labels qa-agent,regression --components Checkout \
@@ -371,6 +385,238 @@ def cmd_duplicates(a):
               f"{f.get('summary','')}  ({f.get('created','')[:10]})")
 
 
+# --------------------------------------------------------------------------- #
+# sprint review
+#
+# Nothing here is tied to one project or workflow: project, labels, status
+# order, QA statuses, docs folder and file names all come from flags or .env.
+# Without a configured status order, tickets are grouped by Jira's status
+# category (In Progress, then To Do, then Done), which every workflow has.
+
+CATEGORY_RANK = {"indeterminate": 0, "new": 1, "done": 2}
+QA_STATUS_HINTS = ("test", "qa", "review", "verif")
+DEFAULT_REPORT_FILES = "qa-report.md,qa-report.html"
+DEFAULT_DRAFT_FILE = "jira-comment-draft.md"
+
+
+def csv_list(v):
+    return [x.strip() for x in (v or "").split(",") if x.strip()]
+
+
+def label_variants(labels):
+    """Jira label matching is case-sensitive; search the common spellings."""
+    out = []
+    for l in labels:
+        title = "-".join(p[:1].upper() + p[1:] for p in l.split("-"))
+        for v in (l, l.lower(), l.upper(), title):
+            if v and v not in out:
+                out.append(v)
+    return out
+
+
+def jql_quote(v):
+    return json.dumps(v)
+
+
+def paged(path, key, params=None):
+    """Follow startAt/maxResults paging for changelog and comment endpoints."""
+    items, start = [], 0
+    while True:
+        p = dict(params or {}, startAt=start, maxResults=100)
+        status, res = api("GET", path, params=p)
+        expect_ok(status, res, f"GET {path}")
+        page = res.get(key) or []
+        items.extend(page)
+        start += len(page)
+        total = res.get("total")
+        if not page or res.get("isLast") or (total is not None and start >= total):
+            return items
+
+
+def parse_ts(ts):
+    import datetime as dt
+    if not ts:
+        return None
+    # Jira: 2026-11-12T10:15:00.000+0600
+    try:
+        return dt.datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S.%f%z")
+    except ValueError:
+        return None
+
+
+def short_date(d):
+    return f"{d.day} {d.strftime('%b')}" if d else "?"
+
+
+def sprint_field_id():
+    status, fields = api("GET", "/rest/api/3/field")
+    expect_ok(status, fields, "Listing fields")
+    for f in fields:
+        if (f.get("schema") or {}).get("custom") == "com.pyxis.greenhopper.jira:gh-sprint":
+            return f["id"]
+    return None
+
+
+def cmd_sprint(a):
+    import datetime as dt
+
+    load_dotenv()
+    env = os.environ.get
+    a.project = a.project or env("JIRA_SPRINT_PROJECT")
+    if not a.project:
+        die("Pass --project or set JIRA_SPRINT_PROJECT in .env.")
+    labels_in = a.labels if a.labels is not None else env("JIRA_SPRINT_LABELS", "")
+    docs_dir = Path(a.docs_dir or env("JIRA_SPRINT_DOCS_DIR", "docs"))
+    order = [x.lower() for x in csv_list(a.status_order or env("JIRA_SPRINT_STATUS_ORDER"))]
+    qa_statuses = [x.lower() for x in csv_list(a.qa_statuses or env("JIRA_SPRINT_QA_STATUSES"))]
+    report_files = csv_list(a.report_files or env("JIRA_SPRINT_REPORT_FILES", DEFAULT_REPORT_FILES))
+    draft_file = a.draft_file or env("JIRA_SPRINT_DRAFT_FILE", DEFAULT_DRAFT_FILE)
+
+    status, me = api("GET", "/rest/api/3/myself")
+    expect_ok(status, me, "Fetching the current user")
+    my_id = me.get("accountId")
+
+    sprint_fid = sprint_field_id()
+    sprint_clause = (f"sprint = {jql_quote(a.sprint)}" if a.sprint
+                     else "sprint in openSprints()")
+    jql = f"project = {jql_quote(a.project)} AND {sprint_clause}"
+    labels = [] if a.all else label_variants(csv_list(labels_in))
+    if labels:
+        jql += " AND labels in (" + ", ".join(jql_quote(l) for l in labels) + ")"
+
+    fields = "summary,status,assignee,labels" + (f",{sprint_fid}" if sprint_fid else "")
+    issues, token = [], None
+    while True:
+        params = {"jql": jql, "maxResults": 100, "fields": fields}
+        if token:
+            params["nextPageToken"] = token
+        st, res = api("GET", "/rest/api/3/search/jql", params=params)
+        expect_ok(st, res, "Sprint search")
+        page = res.get("issues") or []
+        issues.extend(page)
+        token = res.get("nextPageToken")
+        if res.get("isLast") or not token or not page:
+            break
+
+    def status_rank(name, category):
+        # Configured statuses first, in the given order; then QA statuses;
+        # then the rest by status category (In Progress, To Do, Done), by name.
+        if name.lower() in order:
+            return (0, order.index(name.lower()), 0, "")
+        return (1, 0 if is_qa_status(name) else 1, CATEGORY_RANK.get(category, 3), name.lower())
+
+    def is_qa_status(name):
+        n = name.lower()
+        if qa_statuses:
+            return n in qa_statuses
+        return any(h in n for h in QA_STATUS_HINTS)
+
+    sprints, rows = set(), []
+    for i in issues:
+        key, f = i["key"], i.get("fields") or {}
+        for sp in (f.get(sprint_fid) or []) if sprint_fid else []:
+            if isinstance(sp, dict) and (
+                    (a.sprint and sp.get("name") == a.sprint)
+                    or (not a.sprint and sp.get("state") == "active")):
+                sprints.add(sp.get("name"))
+
+        assignee = f.get("assignee") or {}
+        now = bool(my_id) and assignee.get("accountId") == my_id
+
+        was_mine = any(
+            item.get("field") == "assignee" and my_id in (item.get("from"), item.get("to"))
+            for h in paged(f"/rest/api/3/issue/{key}/changelog", "values")
+            for item in h.get("items") or [])
+        mine = "Now" if now else ("Earlier" if was_mine else "")
+
+        my_comments = sorted(
+            filter(None, (parse_ts(c.get("created"))
+                          for c in paged(f"/rest/api/3/issue/{key}/comment", "comments")
+                          if (c.get("author") or {}).get("accountId") == my_id)))
+
+        doc_dir = docs_dir / key
+        files = {p.name: p for p in doc_dir.iterdir() if p.is_file()} if doc_dir.is_dir() else {}
+        reports = [n for n in report_files if n in files]
+        draft = files.get(draft_file)
+        draft_time = (dt.datetime.fromtimestamp(draft.stat().st_mtime, dt.timezone.utc)
+                      if draft else None)
+        # A draft counts as posted when one of my comments is newer than it.
+        draft_unposted = bool(draft) and not any(c >= draft_time for c in my_comments)
+        other_docs = sorted(n for n in files if n not in reports and n != draft_file)
+
+        st = f.get("status") or {}
+        st_name = st.get("name", "")
+        category = (st.get("statusCategory") or {}).get("key", "")
+        tail = key.rsplit("-", 1)[-1]
+        in_qa = is_qa_status(st_name)
+        has_work = bool(my_comments or reports or draft)
+        rows.append({
+            "key": key,
+            "title": f.get("summary", ""),
+            "status": st_name,
+            "status_category": category,
+            "in_qa_status": in_qa,
+            "assignee": assignee.get("displayName", "Unassigned"),
+            "labels": f.get("labels") or [],
+            "assigned_to_me": mine,
+            "my_comment_dates": [c.date().isoformat() for c in my_comments],
+            "reports": reports,
+            "draft": bool(draft),
+            "draft_unposted": draft_unposted,
+            "other_docs": other_docs,
+            "needs_my_qa": in_qa and not has_work,
+            "_sort": (status_rank(st_name, category),
+                      {"Now": 0, "Earlier": 1}.get(mine, 2),
+                      int(tail) if tail.isdigit() else 0),
+            "_comments": my_comments,
+        })
+
+    rows.sort(key=lambda r: r["_sort"])
+    sprint_names = sorted(s for s in sprints if s)
+
+    if a.json:
+        out = {
+            "me": me.get("displayName"),
+            "project": a.project,
+            "sprints": sprint_names,
+            "jql": jql,
+            "settings": {
+                "labels": labels,
+                "status_order": order or "status category",
+                "qa_statuses": qa_statuses or f"names containing {', '.join(QA_STATUS_HINTS)}",
+                "docs_dir": str(docs_dir),
+                "report_files": report_files,
+                "draft_file": draft_file,
+            },
+            "tickets": [{k: v for k, v in r.items() if not k.startswith("_")} for r in rows],
+        }
+        print(json.dumps(out, indent=2))
+        return
+
+    def work(r):
+        bits = []
+        if r["_comments"]:
+            bits.append("✅ Commented " + ", ".join(short_date(c) for c in r["_comments"]))
+        if r["reports"]:
+            bits.append("report done")
+        if r["draft_unposted"]:
+            bits.append("⚠️ comment drafted, not posted")
+        return " · ".join(bits) or "–"
+
+    print(f"Sprint: {', '.join(sprint_names) or '(sprint field not found)'}")
+    print(f"Me: {me.get('displayName')}   Tickets: {len(rows)}"
+          f"   Filter: {'all tickets' if not labels else 'labels in (' + ', '.join(labels) + ')'}\n")
+    print("| Key | Title | Status | Assignee | Assigned to me | My QA work |")
+    print("|---|---|---|---|---|---|")
+    for r in rows:
+        mine = {"Now": "✅ Now", "Earlier": "Earlier"}.get(r["assigned_to_me"], "–")
+        title = r["title"].replace("|", "/")
+        print(f"| {r['key']} | {title} | {r['status']} | {r['assignee']} | {mine} | {work(r)} |")
+    waiting = [r["key"] for r in rows if r["needs_my_qa"]]
+    if waiting:
+        print(f"\nIn a QA status with no QA work from me: {', '.join(waiting)}")
+
+
 def build_bug_payload(a, description):
     fields = {
         "project": {"key": a.project},
@@ -526,6 +772,21 @@ def main():
     s.add_argument("jql")
     s.add_argument("--max", type=int, default=25)
     s.set_defaults(fn=cmd_search)
+
+    sp = sub.add_parser("sprint", help="sprint tickets with my assignment history and QA work")
+    sp.add_argument("--project", help="default: JIRA_SPRINT_PROJECT")
+    sp.add_argument("--sprint", help="sprint name (default: the open sprint)")
+    sp.add_argument("--labels", help="comma-separated labels, case variants added (default: JIRA_SPRINT_LABELS)")
+    sp.add_argument("--all", action="store_true", help="ignore --labels, list every ticket")
+    sp.add_argument("--docs-dir", help="folder holding <KEY>/ QA files (default: docs)")
+    sp.add_argument("--status-order", help="comma-separated statuses to list first, in order "
+                    "(default: group by status category)")
+    sp.add_argument("--qa-statuses", help="comma-separated statuses that mean 'in QA' "
+                    "(default: names containing test, qa, review, verif)")
+    sp.add_argument("--report-files", help=f"QA report file names (default: {DEFAULT_REPORT_FILES})")
+    sp.add_argument("--draft-file", help=f"comment draft file name (default: {DEFAULT_DRAFT_FILE})")
+    sp.add_argument("--json", action="store_true")
+    sp.set_defaults(fn=cmd_sprint)
 
     fl = sub.add_parser("fields", help="list creatable fields for a project/issue type")
     fl.add_argument("--project", required=True)
