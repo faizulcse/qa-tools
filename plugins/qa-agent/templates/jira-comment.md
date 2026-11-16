@@ -193,7 +193,7 @@ _Test data: <records created, changed or restored during testing>._
 
 | Avoid | Why | Use instead |
 | --- | --- | --- |
-| The ticket's own key (e.g. `PROJ-1234`) in the heading or text | Jira turns issue keys into link cards showing the key, title and status | Leave it out; the comment is already on that ticket. Reference other tickets only when needed |
+| The ticket's own key (e.g. `PROJ-1234`) in the heading or text | Jira turns issue keys into link cards showing the key, title and status | Leave it out; the comment is already on that ticket. Reference other tickets only when needed. `comment` removes the own key from headings and prints a NOTE for any left in the text |
 | Curly braces such as `{id}` in paths or JSON | `{...}` is a Jira macro and may show "Unknown macro" | `<id>`, or describe the value: `error: UNAUTHORIZED` |
 | A `*` inside inline code in a list item, e.g. `qa-*` | The converter treats it as italics and breaks the line | Write the full name, e.g. `qa-PCH-841-client` |
 | A pipe `\|` inside a table cell | It splits the cell | "View/Edit" |

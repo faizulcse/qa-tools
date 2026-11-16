@@ -712,8 +712,39 @@ def upload_attachment(key, path):
         print(f"  attached: {p.name}")
 
 
+def strip_own_key(md: str, key: str):
+    """Remove an issue's own key from Markdown headings in a comment on it.
+
+    Jira renders any issue key in a comment as a link card, so "## Retest:
+    PROJ-12, Login" on PROJ-12 shows a card for the ticket the comment is
+    already on. Keys elsewhere in the body are left alone (other tickets are
+    meant to link) but the own key there is reported. Returns (md, notes).
+    """
+    proj, _, num = key.upper().partition("-")
+    k = rf"{re.escape(proj)}[-‑]{re.escape(num)}(?!\d)"
+    notes, out, in_code = [], [], False
+    for n, line in enumerate(md.splitlines(), 1):
+        if line.strip().startswith("```"):
+            in_code = not in_code
+        m = None if in_code else re.match(r"^(#{1,6}\s+)(.*)$", line)
+        if m and re.search(k, m.group(2), re.I):
+            text = re.sub(rf"\s*[(\[]\s*{k}\s*[)\]]", "", m.group(2), flags=re.I)
+            text = re.sub(rf"(?<![\w-]){k}\s*[,:–—-]?\s*", "", text, flags=re.I)
+            text = re.sub(r"\s*[,:–—-]\s*$", "", text).strip() or "Testing Summary"
+            notes.append(f"line {n}: removed {key} from the heading "
+                         f"(Jira would show it as a link card)")
+            line = m.group(1) + text
+        elif not in_code and re.search(rf"(?<![\w-]){k}", line, re.I):
+            notes.append(f"line {n}: mentions {key} itself; Jira will render it as a link card")
+        out.append(line)
+    return "\n".join(out), notes
+
+
 def cmd_comment(a):
     body = Path(a.body_file).read_text() if a.body_file else (a.body or sys.stdin.read())
+    body, notes = strip_own_key(body, a.key)
+    for note in notes:
+        print(f"NOTE: {note}", file=sys.stderr)
     payload = {"body": md_to_jira(body)}
     if a.dry_run:
         print(json.dumps(payload, indent=2))
