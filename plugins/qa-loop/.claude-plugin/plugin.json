@@ -1,0 +1,21 @@
+{
+  "name": "qa-loop",
+  "version": "0.2.0",
+  "description": "The QA retest loop around qa-agent: what changed on a ticket since my last comment, open drafts and unrestored test data, a test-data ledger with a restore check, safe browser helpers (tab guard, yopmail OTP reader, toasts, waits), permission checks (preflight, endpoint matrix, compare), one results file rendered into both the report and the Jira draft with evidence guardrails, a decisions memory, and lint-checked Jira comments. Requires qa-agent. No MCP servers.",
+  "author": {
+    "name": "MD. FAIZUL ISLAM"
+  },
+  "keywords": [
+    "qa",
+    "retest",
+    "jira",
+    "jira-comment",
+    "test-data",
+    "playwright-cli",
+    "otp",
+    "yopmail",
+    "permissions",
+    "report"
+  ],
+  "license": "MIT"
+}

@@ -19,6 +19,12 @@
   `JIRA_SPRINT_LABELS`, `JIRA_SPRINT_STATUS_ORDER`, `JIRA_SPRINT_QA_STATUSES`,
   `JIRA_SPRINT_DOCS_DIR`, `JIRA_SPRINT_REPORT_FILES`,
   `JIRA_SPRINT_DRAFT_FILE`). Jira Cloud only.
+- **No link card in comment headings.** `jira_client.py comment` removes the
+  ticket's own key from Markdown headings before posting (`## Retest: PROJ-12,
+  Login` on PROJ-12 becomes `## Retest: Login`), since Jira renders the key as
+  a link card to the ticket the comment is already on. It prints a `NOTE:` for
+  each change, and for the own key mentioned elsewhere in the text, which is
+  left as is. Keys of other tickets are not touched.
 - **Setup lists the sprint settings.** `qa-setup.sh` and `qa-setup.mjs` add
   the main `JIRA_SPRINT_*` keys to `.env.example`, commented out with their
   defaults. An existing `.env.example` or `.env` is left unchanged, so older

@@ -143,7 +143,9 @@ Follow its status icons, S1-S4 severity scale, verdict guide, and posting
 checklist. Reference filed bug keys (Jira links them automatically) and say
 where the full evidence lives. Keep it short - the report is the attachment,
 the comment is the headline. Preview with `comment ... --dry-run` and confirm
-before posting.
+before posting. `comment` removes the ticket's own key from headings (Jira
+would render it as a link card) and prints a `NOTE:` for each change and for
+any mention of the own key left in the text; show those notes too.
 
 Moving the ticket's status is a team-process decision. List transitions and ask
 before performing one:
