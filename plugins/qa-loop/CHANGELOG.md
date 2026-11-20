@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.2.0
+
+- **qa-perms** (`qa_perms.py`): `whoami` preflight (user, masked email,
+  role, scope, permissions) before planning a pass; `matrix` runs a JSON spec
+  of API calls from the signed-in browser session and classifies each one as
+  allowed, blocked, passed check (400/404 not found/409/422), no route
+  ("Cannot GET"), signed out or server error, with ✅/❌ against
+  `expect` and a warning when the session is signed out; `compare` flags
+  calls where a limited account gets the same access as a full one. Vars can
+  refer to other vars (`--var brand={fake}`).
+- **qa-results** (`qa_results.py`): one results file per run
+  (`docs/KEY/results-<date>.json`); `check` enforces the guardrails: evidence
+  that exists for every failure, complete issues (steps, now/expected,
+  severity), regressions re-checked, no contradiction of recorded decisions,
+  no placeholders; `render --as report|comment` builds the Markdown report
+  and the Jira draft (retest table, issues with steps, or pass summary) from
+  the same data, with a computed verdict and the ledger's Test data line.
+- **qa-decisions** (`qa_decisions.py`): per-ticket and global decisions
+  (expected, ignore, out of scope, AC wording, BA decision, note) with an
+  optional match pattern, used by `qa_results.py check` and `render`.
+
 ## 0.1.0
 
 - First release: four skills for the QA retest loop on top of qa-agent.

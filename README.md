@@ -8,7 +8,9 @@ A Claude Code / Cowork plugin marketplace with four plugins:
 - **qa-loop**: the retest loop on top of qa-agent. It shows what changed on a
   ticket since your last comment, keeps a ledger of test data you changed
   (and checks it's restored), adds safe browser helpers (tab guard, yopmail
-  codes, toasts, waits) and posts lint-checked Jira comments from templates.
+  codes, toasts, waits), checks permissions, renders the report and the Jira
+  draft from one results file with evidence guardrails, remembers decisions
+  and posts lint-checked Jira comments.
 - **git-agent**: drafts a commit message (title + description) from your
   current changes, in the repo's existing style.
 - **pw-setup-agent**: sets up a Playwright + TypeScript test project at the
@@ -156,6 +158,9 @@ Full documentation: [`plugins/qa-agent/README.md`](plugins/qa-agent/README.md).
 | `qa-ledger` | "did you restore everything?" | A record of every test-data change, a restore check and the report's Test data lines |
 | `qa-browser` | "the OTP is in yopmail", "wait for the session to expire" | Tab guard, yopmail code reader, toast recorder, waits, deploy-error check |
 | `qa-comment` | "draft only the issues with steps", "comment it" | Template drafts, a lint check (no ticket keys, links, braces, secrets), posting after your OK, saved posted copies, comment edits |
+| `qa-perms` | "test the role permissions", "which account am I?" | A sign-in preflight, an API permission matrix and a two-account compare |
+| `qa-results` | "test KEY and give a report" | One results file checked by guardrails, rendered into both the report and the Jira draft |
+| `qa-decisions` | "this is expected", "fix this in another ticket" | Decisions that later reports respect |
 
 Needs qa-agent installed (it reuses its Jira client and `.env`).
 
@@ -230,7 +235,7 @@ Marketplace (`qa-tools`): **0.8.0**
 | Plugin | Version | Changelog |
 | --- | --- | --- |
 | qa-agent | 0.7.0 | [`plugins/qa-agent/CHANGELOG.md`](plugins/qa-agent/CHANGELOG.md) |
-| qa-loop | 0.1.0 | [`plugins/qa-loop/CHANGELOG.md`](plugins/qa-loop/CHANGELOG.md) |
+| qa-loop | 0.2.0 | [`plugins/qa-loop/CHANGELOG.md`](plugins/qa-loop/CHANGELOG.md) |
 | git-agent | 0.1.0 | [`plugins/git-agent/CHANGELOG.md`](plugins/git-agent/CHANGELOG.md) |
 | pw-setup-agent | 0.3.0 | [`plugins/pw-setup-agent/CHANGELOG.md`](plugins/pw-setup-agent/CHANGELOG.md) |
 

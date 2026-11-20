@@ -4,7 +4,7 @@
 !.env.example
 .qa-agent/
 .qa-loop/
-qa-results/
+/qa-results/
 qa-workspace/
 .playwright-cli/
 node_modules/
