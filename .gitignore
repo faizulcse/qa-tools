@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 .qa-agent/
+.qa-loop/
 qa-results/
 qa-workspace/
 .playwright-cli/

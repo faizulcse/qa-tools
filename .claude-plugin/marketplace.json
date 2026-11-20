@@ -1,7 +1,7 @@
 {
   "name": "qa-tools",
   "metadata": {
-    "version": "0.7.0"
+    "version": "0.8.0"
   },
   "owner": {
     "name": "MD. FAIZUL ISLAM",
@@ -13,21 +13,55 @@
       "source": "./plugins/qa-agent",
       "version": "0.7.0",
       "description": "Agentic QA assistant: requirements analysis into risk-ordered test plans, browser execution through playwright-cli commands with a saved page snapshot per step, API testing, structured bug reports, sprint ticket reviews, and Jira via a bundled REST client. No MCP servers.",
-      "keywords": ["qa", "testing", "manual-testing", "playwright-cli", "jira", "bug-report"]
+      "keywords": [
+        "qa",
+        "testing",
+        "manual-testing",
+        "playwright-cli",
+        "jira",
+        "bug-report"
+      ]
+    },
+    {
+      "name": "qa-loop",
+      "source": "./plugins/qa-loop",
+      "version": "0.1.0",
+      "description": "The QA retest loop on top of qa-agent: what changed on a ticket since my last comment, open drafts and unrestored test data, a test-data ledger with a restore check, safe browser helpers (tab guard, yopmail OTP reader, toasts, waits) and Jira comments from templates with lint, auto-saved posted copies and edits. Requires qa-agent. No MCP servers.",
+      "keywords": [
+        "qa",
+        "retest",
+        "jira-comment",
+        "test-data",
+        "playwright-cli",
+        "otp"
+      ]
     },
     {
       "name": "git-agent",
       "source": "./plugins/git-agent",
       "version": "0.1.0",
       "description": "Drafts a commit message - title and description - from the current working-tree changes, matched to the repository's existing commit style. Presents the draft for review and never commits without an explicit go-ahead. No MCP servers.",
-      "keywords": ["git", "commit", "commit-message", "conventional-commits", "developer-tools"]
+      "keywords": [
+        "git",
+        "commit",
+        "commit-message",
+        "conventional-commits",
+        "developer-tools"
+      ]
     },
     {
       "name": "pw-setup-agent",
       "source": "./plugins/pw-setup-agent",
       "version": "0.3.0",
       "description": "Sets up and maintains a Playwright + TypeScript test project at the repository root (merged safely into an existing app) or in a sub-folder, using page objects, fixtures and typed test data, and checks that the project follows the conventions and works. No MCP servers required.",
-      "keywords": ["playwright", "typescript", "e2e", "page-object-model", "test-automation", "scaffold"]
+      "keywords": [
+        "playwright",
+        "typescript",
+        "e2e",
+        "page-object-model",
+        "test-automation",
+        "scaffold"
+      ]
     }
   ]
 }

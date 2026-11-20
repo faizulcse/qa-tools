@@ -1,10 +1,14 @@
 # qa-tools
 
-A Claude Code / Cowork plugin marketplace with three plugins:
+A Claude Code / Cowork plugin marketplace with four plugins:
 
 - **qa-agent**: an agentic QA assistant for manual testing. It turns tickets
   into test plans, runs them in a browser or against an API, files bugs, and
   writes reports.
+- **qa-loop**: the retest loop on top of qa-agent. It shows what changed on a
+  ticket since your last comment, keeps a ledger of test data you changed
+  (and checks it's restored), adds safe browser helpers (tab guard, yopmail
+  codes, toasts, waits) and posts lint-checked Jira comments from templates.
 - **git-agent**: drafts a commit message (title + description) from your
   current changes, in the repo's existing style.
 - **pw-setup-agent**: sets up a Playwright + TypeScript test project at the
@@ -22,7 +26,7 @@ scripts.
 | You need | For | Check with |
 | --- | --- | --- |
 | [Claude Code](https://claude.com/claude-code) | everything | `claude --version` |
-| Python 3.8+ | both plugins (standard library only, no `pip install`) | `python3 --version` |
+| Python 3.8+ | qa-agent, qa-loop and git-agent (standard library only, no `pip install`) | `python3 --version` |
 | git | git-agent | `git --version` |
 | Node 20.12+ | pw-setup-agent | `node --version` |
 | Node 18+ | browser testing only (optional) | `node --version` |
@@ -34,6 +38,7 @@ Inside a Claude Code session:
 ```
 /plugin marketplace add faizulcse/qa-tools
 /plugin install qa-agent@qa-tools
+/plugin install qa-loop@qa-tools
 /plugin install git-agent@qa-tools
 /plugin install pw-setup-agent@qa-tools
 ```
@@ -43,6 +48,7 @@ Or from a terminal:
 ```bash
 claude plugin marketplace add faizulcse/qa-tools
 claude plugin install qa-agent@qa-tools
+claude plugin install qa-loop@qa-tools
 claude plugin install git-agent@qa-tools
 claude plugin install pw-setup-agent@qa-tools
 ```
@@ -142,6 +148,19 @@ A typical cycle is **analyze → test (UI or API) → file bugs → report**.
 
 Full documentation: [`plugins/qa-agent/README.md`](plugins/qa-agent/README.md).
 
+## What qa-loop does
+
+| Skill | Say | Produces |
+| --- | --- | --- |
+| `qa-changes` | "retest KEY", "what changed on KEY", "what's still open" | Comments, status and AC changes since your last comment (with a diff); unposted drafts and unrestored test data |
+| `qa-ledger` | "did you restore everything?" | A record of every test-data change, a restore check and the report's Test data lines |
+| `qa-browser` | "the OTP is in yopmail", "wait for the session to expire" | Tab guard, yopmail code reader, toast recorder, waits, deploy-error check |
+| `qa-comment` | "draft only the issues with steps", "comment it" | Template drafts, a lint check (no ticket keys, links, braces, secrets), posting after your OK, saved posted copies, comment edits |
+
+Needs qa-agent installed (it reuses its Jira client and `.env`).
+
+Full documentation: [`plugins/qa-loop/README.md`](plugins/qa-loop/README.md).
+
 ## What git-agent does
 
 | Skill | Say | Produces |
@@ -177,6 +196,7 @@ Updates install automatically by default. To update now:
 ```
 /plugin marketplace update
 /plugin update qa-agent@qa-tools
+/plugin update qa-loop@qa-tools
 /plugin update git-agent@qa-tools
 /plugin update pw-setup-agent@qa-tools
 ```
@@ -201,15 +221,16 @@ Updates install automatically by default. To update now:
    only update when the marketplace entry's version changes.
 3. Commit and push.
 
-Tag releases if you want people to pin one: `/plugin marketplace add owner/repo@v0.7.0`.
+Tag releases if you want people to pin one: `/plugin marketplace add owner/repo@v0.8.0`.
 
 ## Versions
 
-Marketplace (`qa-tools`): **0.7.0**
+Marketplace (`qa-tools`): **0.8.0**
 
 | Plugin | Version | Changelog |
 | --- | --- | --- |
 | qa-agent | 0.7.0 | [`plugins/qa-agent/CHANGELOG.md`](plugins/qa-agent/CHANGELOG.md) |
+| qa-loop | 0.1.0 | [`plugins/qa-loop/CHANGELOG.md`](plugins/qa-loop/CHANGELOG.md) |
 | git-agent | 0.1.0 | [`plugins/git-agent/CHANGELOG.md`](plugins/git-agent/CHANGELOG.md) |
 | pw-setup-agent | 0.3.0 | [`plugins/pw-setup-agent/CHANGELOG.md`](plugins/pw-setup-agent/CHANGELOG.md) |
 
