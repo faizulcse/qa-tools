@@ -1,0 +1,18 @@
+{
+  "name": "qa-annotate",
+  "version": "0.1.0",
+  "description": "Marks failing screenshots: a box or arrow with a numbered reason on the element that is wrong, an Expected / Actual banner taken from the test record, and blur over personal data. The original screenshot is never changed. Works with qa-agent's case records and qa-loop's results files; draws through playwright-cli, no image library. No MCP servers.",
+  "author": {
+    "name": "MD. FAIZUL ISLAM"
+  },
+  "keywords": [
+    "qa",
+    "screenshot",
+    "annotate",
+    "evidence",
+    "bug-report",
+    "redaction",
+    "playwright-cli"
+  ],
+  "license": "MIT"
+}

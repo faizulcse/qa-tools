@@ -39,6 +39,20 @@
       ]
     },
     {
+      "name": "qa-annotate",
+      "source": "./plugins/qa-annotate",
+      "version": "0.1.0",
+      "description": "Marks failing screenshots: a box or arrow with a numbered reason on the failing element, an Expected / Actual banner from the test record, and blur over personal data, in a separate marked copy. Requires qa-agent; draws through playwright-cli. No MCP servers.",
+      "keywords": [
+        "qa",
+        "screenshot",
+        "annotate",
+        "evidence",
+        "bug-report",
+        "redaction"
+      ]
+    },
+    {
       "name": "git-agent",
       "source": "./plugins/git-agent",
       "version": "0.1.0",

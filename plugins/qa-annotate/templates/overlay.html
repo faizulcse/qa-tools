@@ -1,0 +1,206 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>qa-annotate overlay</title>
+<style>
+  :root { --k: 1; --fail: #d92d20; --warn: #dc6803; --info: #1570ef; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #ffffff; overflow-x: hidden; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         font-size: calc(15px * var(--k)); line-height: 1.4; color: #101828; }
+  #banner { padding: calc(12px * var(--k)) calc(16px * var(--k)); background: #101828; color: #f9fafb; }
+  #banner .head { display: flex; align-items: center; gap: calc(10px * var(--k)); font-weight: 600; }
+  #banner .pill { padding: calc(2px * var(--k)) calc(10px * var(--k)); border-radius: 999px;
+                  font-size: calc(12px * var(--k)); letter-spacing: .04em; color: #fff; }
+  #banner .finding { margin-top: calc(8px * var(--k)); }
+  #banner .finding .what { color: #d0d5dd; font-size: calc(13px * var(--k)); margin-bottom: calc(2px * var(--k)); }
+  #banner .row { display: flex; gap: calc(8px * var(--k)); }
+  #banner .row b { flex: 0 0 auto; width: calc(72px * var(--k)); color: #98a2b3; font-weight: 600; }
+  #banner .row span { flex: 1 1 auto; overflow-wrap: anywhere; }
+  #banner .row.actual span { color: #fecdca; }
+  #stage { position: relative; overflow: hidden; }
+  #stage img { display: block; }
+  .box { position: absolute; border: calc(3px * var(--k)) solid var(--c);
+         box-shadow: 0 0 0 calc(2px * var(--k)) #fff, inset 0 0 0 calc(1px * var(--k)) #fff;
+         border-radius: calc(3px * var(--k)); }
+  .box.approx { border-style: dashed; }
+  .badge { position: absolute; width: calc(24px * var(--k)); height: calc(24px * var(--k));
+           border-radius: 50%; background: var(--c); color: #fff; border: calc(2px * var(--k)) solid #fff;
+           font-weight: 700; font-size: calc(13px * var(--k)); display: flex; align-items: center;
+           justify-content: center; }
+  .label { position: absolute; max-width: calc(340px * var(--k)); padding: calc(4px * var(--k)) calc(8px * var(--k));
+           background: var(--c); color: #fff; border: calc(2px * var(--k)) solid #fff;
+           border-radius: calc(4px * var(--k)); font-size: calc(13px * var(--k)); font-weight: 600;
+           box-shadow: 0 1px 4px rgba(0,0,0,.35); overflow-wrap: anywhere; }
+  .blur { position: absolute; overflow: hidden; border-radius: calc(2px * var(--k)); }
+  .blur > div { position: absolute; background-repeat: no-repeat; filter: blur(calc(9px * var(--k))); }
+  .solid { position: absolute; background: #101828; }
+  svg { position: absolute; left: 0; top: 0; pointer-events: none; }
+  #foot { padding: calc(6px * var(--k)) calc(16px * var(--k)); font-size: calc(12px * var(--k));
+          color: #475467; background: #f2f4f7; }
+</style>
+</head>
+<body>
+<div id="banner"></div>
+<div id="stage"><img id="shot" src="source.png" alt=""></div>
+<div id="foot"></div>
+<script id="data" type="application/json">/*__DATA__*/</script>
+<script>
+(function () {
+  const D = JSON.parse(document.getElementById("data").textContent);
+  const W = D.W, H = D.H, k = D.k || 1;
+  const COLORS = { fail: "#d92d20", warn: "#dc6803", info: "#1570ef" };
+  const color = (lvl) => COLORS[lvl] || COLORS.fail;
+  document.documentElement.style.setProperty("--k", k);
+  document.body.style.width = W + "px";
+
+  function el(tag, cls, parent, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+
+  // banner
+  const banner = document.getElementById("banner");
+  const b = D.banner;
+  if (b && (b.title || (b.findings && b.findings.length))) {
+    const head = el("div", "head", banner);
+    const pill = el("span", "pill", head, (b.status || "fail").toUpperCase());
+    pill.style.background = color(b.status);
+    el("span", null, head, b.title || "");
+    (b.findings || []).forEach((f) => {
+      const box = el("div", "finding", banner);
+      if (f.label) el("div", "what", box, f.label);
+      if (f.expected) { const r = el("div", "row", box); el("b", null, r, "Expected"); el("span", null, r, f.expected); }
+      if (f.actual) { const r = el("div", "row actual", box); el("b", null, r, "Actual"); el("span", null, r, f.actual); }
+    });
+  } else {
+    banner.remove();
+  }
+
+  // stage
+  const stage = document.getElementById("stage");
+  const img = document.getElementById("shot");
+  stage.style.width = W + "px"; stage.style.height = H + "px";
+  img.width = W; img.height = H;
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("width", W); svg.setAttribute("height", H);
+
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const placed = [];
+  const overlaps = (a) => placed.some((p) => a.x < p.x + p.w && a.x + a.w > p.x && a.y < p.y + p.h && a.y + a.h > p.y);
+
+  function placeLabel(node, candidates) {
+    const w = node.offsetWidth, h = node.offsetHeight;
+    let best = null;
+    for (const c of candidates) {
+      const r = { x: clamp(c.x, 4, Math.max(4, W - w - 4)), y: clamp(c.y, 4, Math.max(4, H - h - 4)), w, h };
+      if (!best) best = r;
+      if (!overlaps(r)) { best = r; break; }
+    }
+    // still overlapping: step down until free (bounded)
+    for (let i = 0; i < 12 && overlaps(best); i++) best.y = clamp(best.y + h + 4, 4, Math.max(4, H - h - 4));
+    node.style.left = best.x + "px"; node.style.top = best.y + "px";
+    placed.push(best);
+    return best;
+  }
+
+  // covers first, so boxes and labels sit on top
+  D.marks.filter((m) => m.kind === "blur" || m.kind === "solid").forEach((m) => {
+    if (m.kind === "solid") {
+      const s = el("div", "solid", stage);
+      Object.assign(s.style, { left: m.x + "px", top: m.y + "px", width: m.w + "px", height: m.h + "px" });
+      return;
+    }
+    const wrap = el("div", "blur", stage);
+    Object.assign(wrap.style, { left: m.x + "px", top: m.y + "px", width: m.w + "px", height: m.h + "px" });
+    const pad = Math.round(24 * k);
+    const inner = el("div", null, wrap);
+    Object.assign(inner.style, {
+      left: -pad + "px", top: -pad + "px", width: (m.w + 2 * pad) + "px", height: (m.h + 2 * pad) + "px",
+      backgroundImage: "url(source.png)", backgroundSize: W + "px " + H + "px",
+      backgroundPosition: (-(m.x - pad)) + "px " + (-(m.y - pad)) + "px",
+    });
+  });
+
+  // pass 1: every box and badge, so no label is placed on top of another mark
+  const boxes = D.marks.filter((m) => m.kind === "box");
+  const r = 12 * k, pad = 4 * k;
+  boxes.forEach((m) => {
+    const c = color(m.level);
+    const bx = el("div", "box" + (m.approx ? " approx" : ""), stage);
+    bx.style.setProperty("--c", c);
+    Object.assign(bx.style, { left: m.x + "px", top: m.y + "px", width: Math.max(m.w, 6) + "px", height: Math.max(m.h, 6) + "px" });
+    placed.push({ x: m.x - pad, y: m.y - pad, w: Math.max(m.w, 6) + 2 * pad, h: Math.max(m.h, 6) + 2 * pad });
+    const badge = el("div", "badge", stage, String(m.n));
+    badge.style.setProperty("--c", c);
+    const bxl = clamp(m.x - r, 0, W - 2 * r), bxt = clamp(m.y - r, 0, H - 2 * r);
+    badge.style.left = bxl + "px";
+    badge.style.top = bxt + "px";
+    placed.push({ x: bxl, y: bxt, w: 2 * r, h: 2 * r });
+  });
+  // arrow targets are marks too
+  D.marks.filter((m) => m.kind === "arrow").forEach((m) => placed.push({ x: m.x - 3 * r, y: m.y - 3 * r, w: 6 * r, h: 6 * r }));
+
+  // pass 2: labels - right of the box (usually free space), then below, above, left
+  boxes.forEach((m) => {
+    if (!m.label) return;
+    const c = color(m.level);
+    const lab = el("div", "label", stage, m.n + "  " + m.label);
+    lab.style.setProperty("--c", c);
+    const gap = 8 * k, lw = lab.offsetWidth, lh = lab.offsetHeight;
+    const midY = m.y + m.h / 2 - lh / 2;
+    placeLabel(lab, [
+      { x: m.x + m.w + gap, y: midY },
+      { x: m.x, y: m.y + m.h + gap },
+      { x: m.x, y: m.y - lh - gap },
+      { x: m.x - lw - gap, y: midY },
+      { x: m.x + m.w + gap, y: m.y + m.h + gap },
+      { x: m.x + m.w - lw, y: m.y + m.h + gap },
+    ]);
+  });
+
+  let defs = false;
+  D.marks.filter((m) => m.kind === "arrow").forEach((m) => {
+    const c = color(m.level);
+    if (!defs) {
+      defs = true;
+      svg.innerHTML = Object.keys(COLORS).map((l) =>
+        `<marker id="h-${l}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${COLORS[l]}" stroke="#fff" stroke-width="1"/></marker>`
+      ).join("");
+    }
+    const lab = el("div", "label", stage, m.n + "  " + (m.label || ""));
+    lab.style.setProperty("--c", c);
+    const dx = m.x > W / 2 ? -1 : 1, dy = m.y > H / 2 ? -1 : 1;
+    const off = 70 * k;
+    const p = placeLabel(lab, [
+      { x: m.x + dx * off - (dx < 0 ? lab.offsetWidth : 0), y: m.y + dy * off - (dy < 0 ? lab.offsetHeight : 0) },
+      { x: m.x - dx * off - (dx > 0 ? lab.offsetWidth : 0), y: m.y + dy * off - (dy < 0 ? lab.offsetHeight : 0) },
+    ]);
+    const sx = clamp(m.x, p.x, p.x + p.w), sy = clamp(m.y, p.y, p.y + p.h);
+    const lvl = COLORS[m.level] ? m.level : "fail";
+    for (const [stroke, width] of [["#fff", 7 * k], [c, 4 * k]]) {
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      line.setAttribute("x1", sx); line.setAttribute("y1", sy);
+      line.setAttribute("x2", m.x); line.setAttribute("y2", m.y);
+      line.setAttribute("stroke", stroke); line.setAttribute("stroke-width", width);
+      line.setAttribute("stroke-linecap", "round");
+      if (m.approx) line.setAttribute("stroke-dasharray", `${10 * k} ${8 * k}`);
+      if (stroke !== "#fff") line.setAttribute("marker-end", `url(#h-${lvl})`);
+      svg.appendChild(line);
+    }
+  });
+  stage.appendChild(svg);
+  // labels above the arrows
+  stage.querySelectorAll(".label").forEach((n) => stage.appendChild(n));
+
+  const foot = document.getElementById("foot");
+  if (D.foot) foot.textContent = D.foot; else foot.remove();
+  document.body.setAttribute("data-ready", "1");
+})();
+</script>
+</body>
+</html>

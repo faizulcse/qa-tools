@@ -1,6 +1,6 @@
 # qa-tools
 
-A Claude Code / Cowork plugin marketplace with four plugins:
+A Claude Code / Cowork plugin marketplace with five plugins:
 
 - **qa-agent**: an agentic QA assistant for manual testing. It turns tickets
   into test plans, runs them in a browser or against an API, files bugs, and
@@ -11,6 +11,9 @@ A Claude Code / Cowork plugin marketplace with four plugins:
   codes, toasts, waits), checks permissions, renders the report and the Jira
   draft from one results file with evidence guardrails, remembers decisions
   and posts lint-checked Jira comments.
+- **qa-annotate**: marks failing screenshots with a box and the failing
+  reason, an Expected / Actual banner from the test record, and blur over
+  personal data, in a separate marked copy.
 - **git-agent**: drafts a commit message (title + description) from your
   current changes, in the repo's existing style.
 - **pw-setup-agent**: sets up a Playwright + TypeScript test project at the
@@ -28,7 +31,7 @@ scripts.
 | You need | For | Check with |
 | --- | --- | --- |
 | [Claude Code](https://claude.com/claude-code) | everything | `claude --version` |
-| Python 3.8+ | qa-agent, qa-loop and git-agent (standard library only, no `pip install`) | `python3 --version` |
+| Python 3.8+ | qa-agent, qa-loop, qa-annotate and git-agent (standard library only, no `pip install`) | `python3 --version` |
 | git | git-agent | `git --version` |
 | Node 20.12+ | pw-setup-agent | `node --version` |
 | Node 18+ | browser testing only (optional) | `node --version` |
@@ -41,6 +44,7 @@ Inside a Claude Code session:
 /plugin marketplace add faizulcse/qa-tools
 /plugin install qa-agent@qa-tools
 /plugin install qa-loop@qa-tools
+/plugin install qa-annotate@qa-tools
 /plugin install git-agent@qa-tools
 /plugin install pw-setup-agent@qa-tools
 ```
@@ -51,6 +55,7 @@ Or from a terminal:
 claude plugin marketplace add faizulcse/qa-tools
 claude plugin install qa-agent@qa-tools
 claude plugin install qa-loop@qa-tools
+claude plugin install qa-annotate@qa-tools
 claude plugin install git-agent@qa-tools
 claude plugin install pw-setup-agent@qa-tools
 ```
@@ -166,6 +171,18 @@ Needs qa-agent installed (it reuses its Jira client and `.env`).
 
 Full documentation: [`plugins/qa-loop/README.md`](plugins/qa-loop/README.md).
 
+## What qa-annotate does
+
+| Skill | Say | Produces |
+| --- | --- | --- |
+| `qa-mark` | "mark the failure on the screenshot", "blur the email in this shot" | `<shot>.marked.png`: box and numbered reason on the failing element, Expected / Actual banner, blurred personal data |
+| `qa-mark-run` | "mark all the failures for PROJ-12" | Marked copies for every failing screenshot in a run or ticket, and what's still unmarked |
+
+Needs qa-agent installed (playwright-cli and its case records). The original
+screenshot is never changed.
+
+Full documentation: [`plugins/qa-annotate/README.md`](plugins/qa-annotate/README.md).
+
 ## What git-agent does
 
 | Skill | Say | Produces |
@@ -236,6 +253,7 @@ Marketplace (`qa-tools`): **0.8.0**
 | --- | --- | --- |
 | qa-agent | 0.7.0 | [`plugins/qa-agent/CHANGELOG.md`](plugins/qa-agent/CHANGELOG.md) |
 | qa-loop | 0.2.0 | [`plugins/qa-loop/CHANGELOG.md`](plugins/qa-loop/CHANGELOG.md) |
+| qa-annotate | 0.1.0 | [`plugins/qa-annotate/CHANGELOG.md`](plugins/qa-annotate/CHANGELOG.md) |
 | git-agent | 0.1.0 | [`plugins/git-agent/CHANGELOG.md`](plugins/git-agent/CHANGELOG.md) |
 | pw-setup-agent | 0.3.0 | [`plugins/pw-setup-agent/CHANGELOG.md`](plugins/pw-setup-agent/CHANGELOG.md) |
 
