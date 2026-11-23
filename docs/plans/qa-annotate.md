@@ -1,6 +1,21 @@
 # qa-annotate: Plan
 
-Status: **planned, not started.** Nothing here is built yet.
+Status: **plugin built as qa-annotate 0.1.0** (not released yet). The
+integration changes in qa-agent and qa-loop (step 6 of the build order) are
+not done. Differences from the plan found while building:
+
+- playwright-cli blocks `file://` pages, so `draw` serves the overlay page from
+  a temporary `127.0.0.1` server (stdlib `http.server`) instead.
+- `locate` does not scroll by default, so the box matches the screenshot
+  already taken; `--scroll --shoot` takes a fresh matching screenshot and
+  copies the banner into its spec.
+- Added `new`, `add`, `show`, `remove` and `redact` (blur boxes found on the
+  open page) to the commands.
+- The banner holds a list of findings, so several failed checks on the same
+  screenshot share one marked copy.
+- Mobile device emulation (`open --device`) crashes in playwright-cli 0.1.24,
+  so the 2x / 3x case was tested with a constructed spec; `--hires`
+  screenshots scale by image width / viewport width.
 
 ## Purpose
 
